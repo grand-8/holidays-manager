@@ -32,6 +32,9 @@ export const OTP_REQUEST_WINDOW_MINUTES = 15;
 /** Durée de vie glissante d'une session, en jours (spec section 2). */
 export const SESSION_TTL_DAYS = 30;
 
+/** Nom du cookie de session (module pur : importable côté edge/middleware). */
+export const SESSION_COOKIE = "session";
+
 /** Longueur du code OTP. */
 export const OTP_LENGTH = 6;
 

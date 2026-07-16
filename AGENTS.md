@@ -39,6 +39,21 @@ avant d'implémenter une règle métier (scores, algorithme, mode de secours, et
 - `npm run db:studio` — explorer la base
 - `npm run lint` / `npx tsc --noEmit` — qualité
 
+## Particularités Next.js 16 (vérifiées dans node_modules/next/dist/docs)
+- `cookies()` est **async** : `const c = await cookies()`. Les cookies ne se
+  **modifient** que dans une Server Action / Route Handler / proxy — jamais au
+  rendu d'un Server Component (lecture seule y est permise).
+- La convention ex-`middleware.ts` s'appelle **`proxy.ts`** (`export function proxy`)
+  en Next 16. On l'utilise pour le glissement du cookie de session (pas d'accès
+  base sur l'edge).
+- Server Actions : `"use server"`, atteignables par POST direct → toujours
+  valider et contrôler les droits à l'intérieur.
+
+## Auth (src/lib/auth)
+- `otp.ts` (génération/hachage scrypt), `session.ts` (cookie + sliding + destroy),
+  `current-user.ts` (`requireUser`/`requireAdmin`), `actions.ts` (requestOtp/
+  verifyOtp/logout). Emails dans `src/lib/emails`.
+
 ## Modèle de données
 Défini dans `prisma/schema.prisma` d'après la section 7 de la spec. Toutes les
 entités sont rattachées à un `Property` (multi-bien anticipé). `AuditLog` est
