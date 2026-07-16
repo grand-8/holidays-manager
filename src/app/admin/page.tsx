@@ -1,13 +1,21 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/prisma";
-import { getActiveCycle } from "@/lib/cycles/service";
+import { getActiveCycle, getCompletion } from "@/lib/cycles/service";
 import { getConfigHistory } from "@/lib/stats/history";
 import { computeWeekSlots } from "@/lib/scheduling/weeks";
 import { DEFAULT_SEUIL_SCORE_MINIMUM } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { CreateCycleForm } from "./create-cycle-form";
 import { CycleConfig } from "./cycle-config";
+import { GenerateButton } from "./generate-button";
 
 const STATUT_LABELS: Record<string, string> = {
   config: "Configuration",
@@ -45,6 +53,12 @@ export default async function AdminPage() {
         </section>
       ) : cycle.statut === "config" ? (
         <ConfigView cycleId={cycle.id} propertyId={admin.propertyId} />
+      ) : cycle.statut === "collecte" || cycle.statut === "collecte_tour2" ? (
+        <CollecteView
+          cycleId={cycle.id}
+          propertyId={admin.propertyId}
+          annee={cycle.annee}
+        />
       ) : (
         <section className="space-y-2">
           <p className="text-sm">
@@ -52,12 +66,81 @@ export default async function AdminPage() {
             <strong>{STATUT_LABELS[cycle.statut] ?? cycle.statut}</strong>
           </p>
           <p className="text-muted-foreground text-sm">
-            La suite (suivi de complétion, génération, vote) sera pilotée depuis
-            cet écran. (En cours de construction.)
+            {cycle.statut === "vote"
+              ? "Les propositions ont été générées et envoyées aux familles. L'écran de vote et la décision finale arrivent à l'étape suivante."
+              : "La suite sera pilotée depuis cet écran. (En cours de construction.)"}
           </p>
         </section>
       )}
     </main>
+  );
+}
+
+/** Vue de suivi + déclenchement de la génération (statut collecte). */
+async function CollecteView({
+  cycleId,
+  propertyId,
+  annee,
+}: {
+  cycleId: string;
+  propertyId: string;
+  annee: number;
+}) {
+  const rows = await getCompletion(cycleId, propertyId);
+  const done = rows.filter((r) => r.responded).length;
+  const allResponded = done === rows.length;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Collecte {annee} — {done}/{rows.length} réponse
+            {rows.length > 1 ? "s" : ""}
+          </CardTitle>
+          <CardDescription>
+            Suivi des familles. Le détail des préférences reste masqué jusqu&apos;à
+            la génération.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="divide-y">
+            {rows.map((r) => (
+              <li
+                key={r.userId}
+                className="flex items-center justify-between py-2 text-sm"
+              >
+                <span>{r.nomAffiche}</span>
+                <span>
+                  {r.responded ? (
+                    <span className="text-green-600 dark:text-green-500">
+                      Répondu&nbsp;✅{r.optedOut ? " (ne participe pas)" : ""}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      En attente&nbsp;⏳
+                    </span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Générer les plannings</CardTitle>
+          <CardDescription>
+            Fige les droits et les préférences, puis calcule les propositions à
+            soumettre au vote.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GenerateButton cycleId={cycleId} allResponded={allResponded} />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

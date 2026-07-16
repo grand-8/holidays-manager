@@ -86,11 +86,18 @@ export default async function DashboardPage() {
                       ? "Vous avez répondu ✅ — vous pouvez encore modifier vos préférences jusqu'à la clôture."
                       : "Vous n'avez pas encore renseigné vos préférences."}
                   </p>
-                  <Button asChild>
-                    <Link href="/preferences">
-                      {aRepondu ? "Modifier mes préférences" : "Saisir mes préférences"}
-                    </Link>
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild>
+                      <Link href="/preferences">
+                        {aRepondu
+                          ? "Modifier mes préférences"
+                          : "Saisir mes préférences"}
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline">
+                      <Link href="/suivi">Voir qui a répondu</Link>
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <p className="text-muted-foreground text-sm">

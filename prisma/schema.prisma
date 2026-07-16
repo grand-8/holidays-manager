@@ -265,7 +265,9 @@ model ScheduleAssignment {
 
   proposal ScheduleProposal @relation(fields: [scheduleProposalId], references: [id], onDelete: Cascade)
   user     User             @relation(fields: [userId], references: [id])
-  weekSlot WeekSlot         @relation(fields: [weekSlotId], references: [id])
+  // Cascade : supprimer une semaine (ex. suppression/redémarrage d'un cycle, §4.7.3)
+  // supprime les attributions qui la référencent.
+  weekSlot WeekSlot         @relation(fields: [weekSlotId], references: [id], onDelete: Cascade)
 
   @@index([scheduleProposalId])
 }

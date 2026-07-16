@@ -7,7 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { computeWeekSlots } from "@/lib/scheduling/weeks";
 import { checkCoherence, getActiveCycle } from "./service";
+import { runGeneration } from "./generation";
 import { sendInvitationEmail } from "@/lib/emails/invitation";
+import { sendProposalsReadyEmail } from "@/lib/emails/proposals";
 
 /** Parse une date "YYYY-MM-DD" en Date UTC (minuit), ou null. */
 function parseUtcDate(s: unknown): Date | null {
@@ -209,5 +211,68 @@ export async function launchCollection(
 
   revalidatePath("/admin");
   revalidatePath("/tableau-de-bord");
+  redirect("/admin");
+}
+
+// --- Génération des plannings (§4.4 / §4.5) ----------------------------------
+
+export type GenerateState = {
+  status: "idle" | "error" | "fallback";
+  message?: string;
+};
+
+const FALLBACK_REASONS: Record<string, string> = {
+  aucune_combinaison: "aucune combinaison valide n'existe",
+  moins_de_deux: "moins de deux propositions réellement distinctes",
+  sous_seuil: "le meilleur score minimum est sous le seuil configuré",
+  timeout: "le délai de calcul a été dépassé",
+};
+
+/**
+ * Déclenche la génération des plannings (spec section 4.4). Gèle les préférences
+ * en faisant sortir le cycle de la collecte (en cas de succès → « vote »).
+ */
+export async function generatePlannings(
+  _prev: GenerateState,
+  formData: FormData,
+): Promise<GenerateState> {
+  const admin = await requireAdmin();
+  const cycleId = String(formData.get("cycleId") ?? "");
+
+  const cycle = await prisma.cycle.findUnique({
+    where: { id: cycleId },
+    include: { property: { include: { users: { where: { actif: true } } } } },
+  });
+  if (!cycle || cycle.propertyId !== admin.propertyId) {
+    return { status: "error", message: "Cycle introuvable." };
+  }
+  if (cycle.statut !== "collecte" && cycle.statut !== "collecte_tour2") {
+    return {
+      status: "error",
+      message: "La génération n'est pas disponible dans cet état.",
+    };
+  }
+
+  const result = await runGeneration(cycleId);
+
+  if (result.status === "fallback") {
+    // Le mode de secours (§4.7) sera branché ultérieurement : on ne fige rien,
+    // le cycle reste en collecte et l'admin est informé de la raison.
+    return {
+      status: "fallback",
+      message: `Aucun planning satisfaisant : ${FALLBACK_REASONS[result.reason] ?? result.reason}. Ajustez les droits/préférences (le mode de secours arrivera ensuite).`,
+    };
+  }
+
+  // Succès : le cycle est passé en « vote » ; on notifie les familles.
+  await Promise.allSettled(
+    cycle.property.users.map((u) =>
+      sendProposalsReadyEmail(u.email, cycle.annee),
+    ),
+  );
+
+  revalidatePath("/admin");
+  revalidatePath("/tableau-de-bord");
+  revalidatePath("/vote");
   redirect("/admin");
 }

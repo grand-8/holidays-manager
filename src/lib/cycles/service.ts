@@ -33,6 +33,49 @@ export async function getCycleConfig(cycleId: string) {
   });
 }
 
+export type CompletionRow = {
+  userId: string;
+  nomAffiche: string;
+  optedOut: boolean;
+  responded: boolean;
+};
+
+/**
+ * Suivi de complétion (spec section 4.3) : pour chaque famille active, a-t-elle
+ * répondu (préférences soumises ou opt-out) ou est-elle en attente. Le DÉTAIL
+ * des préférences n'est jamais exposé ici.
+ */
+export async function getCompletion(
+  cycleId: string,
+  propertyId: string,
+): Promise<CompletionRow[]> {
+  const [users, rights, optOuts] = await Promise.all([
+    prisma.user.findMany({
+      where: { propertyId, actif: true },
+      orderBy: { nomAffiche: "asc" },
+      select: { id: true, nomAffiche: true },
+    }),
+    prisma.familyRight.findMany({
+      where: { cycleId },
+      select: { userId: true, soumisLe: true },
+    }),
+    prisma.optOut.findMany({ where: { cycleId }, select: { userId: true } }),
+  ]);
+
+  const soumisMap = new Map(rights.map((r) => [r.userId, r.soumisLe]));
+  const optSet = new Set(optOuts.map((o) => o.userId));
+
+  return users.map((u) => {
+    const optedOut = optSet.has(u.id);
+    return {
+      userId: u.id,
+      nomAffiche: u.nomAffiche,
+      optedOut,
+      responded: optedOut || (soumisMap.get(u.id) ?? null) !== null,
+    };
+  });
+}
+
 export type Coherence = {
   totalRights: number;
   weekCount: number;
