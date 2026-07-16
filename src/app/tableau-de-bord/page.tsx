@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth/current-user";
 import { logout } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -16,11 +17,18 @@ export default async function DashboardPage() {
             {user.isAdmin ? " (admin)" : ""}.
           </p>
         </div>
-        <form action={logout}>
-          <Button type="submit" variant="outline" size="sm">
-            Se déconnecter
-          </Button>
-        </form>
+        <div className="flex items-center gap-2">
+          {user.isAdmin && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin">Administration</Link>
+            </Button>
+          )}
+          <form action={logout}>
+            <Button type="submit" variant="ghost" size="sm">
+              Se déconnecter
+            </Button>
+          </form>
+        </div>
       </div>
 
       <div className="text-muted-foreground mt-8 rounded-lg border border-dashed p-8 text-center text-sm">
