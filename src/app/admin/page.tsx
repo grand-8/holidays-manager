@@ -13,9 +13,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getVoteData } from "@/lib/vote/service";
 import { CreateCycleForm } from "./create-cycle-form";
 import { CycleConfig } from "./cycle-config";
 import { GenerateButton } from "./generate-button";
+import { AdminDecision } from "./admin-decision";
 
 const STATUT_LABELS: Record<string, string> = {
   config: "Configuration",
@@ -59,6 +61,8 @@ export default async function AdminPage() {
           propertyId={admin.propertyId}
           annee={cycle.annee}
         />
+      ) : cycle.statut === "vote" ? (
+        <VoteAdminView cycleId={cycle.id} adminId={admin.id} annee={cycle.annee} />
       ) : (
         <section className="space-y-2">
           <p className="text-sm">
@@ -66,13 +70,62 @@ export default async function AdminPage() {
             <strong>{STATUT_LABELS[cycle.statut] ?? cycle.statut}</strong>
           </p>
           <p className="text-muted-foreground text-sm">
-            {cycle.statut === "vote"
-              ? "Les propositions ont été générées et envoyées aux familles. L'écran de vote et la décision finale arrivent à l'étape suivante."
-              : "La suite sera pilotée depuis cet écran. (En cours de construction.)"}
+            La suite sera pilotée depuis cet écran. (En cours de construction.)
           </p>
         </section>
       )}
     </main>
+  );
+}
+
+/** Vue admin pendant le vote : décompte + décision, ou récap si déjà décidé. */
+async function VoteAdminView({
+  cycleId,
+  adminId,
+  annee,
+}: {
+  cycleId: string;
+  adminId: string;
+  annee: number;
+}) {
+  const data = await getVoteData(cycleId, adminId, true);
+  if (!data) return null;
+
+  if (data.finalScheduleProposalId) {
+    const idx =
+      data.proposals.findIndex((p) => p.id === data.finalScheduleProposalId) + 1;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Décision prise — {annee}</CardTitle>
+          <CardDescription>
+            Proposition {idx} retenue (
+            {data.finalDecidePar === "admin" ? "décision admin" : "issue du vote"}
+            ). Le planning est verrouillé.
+          </CardDescription>
+        </CardHeader>
+        {data.finalCommentaire && (
+          <CardContent>
+            <p className="text-sm">
+              <span className="font-medium">Justification : </span>
+              {data.finalCommentaire}
+            </p>
+          </CardContent>
+        )}
+      </Card>
+    );
+  }
+
+  return (
+    <AdminDecision
+      cycleId={cycleId}
+      proposals={data.proposals.map((p, i) => ({
+        id: p.id,
+        index: i + 1,
+        globalScore: p.globalScore,
+        voteCount: p.voteCount ?? 0,
+      }))}
+    />
   );
 }
 

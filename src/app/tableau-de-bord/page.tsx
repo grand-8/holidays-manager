@@ -99,6 +99,15 @@ export default async function DashboardPage() {
                     </Button>
                   </div>
                 </>
+              ) : cycle.statut === "vote" ? (
+                <>
+                  <p className="text-sm">
+                    Les propositions de planning sont prêtes.
+                  </p>
+                  <Button asChild>
+                    <Link href="/vote">Voir les propositions et voter</Link>
+                  </Button>
+                </>
               ) : (
                 <p className="text-muted-foreground text-sm">
                   La saisie des préférences n&apos;est pas ouverte actuellement.
