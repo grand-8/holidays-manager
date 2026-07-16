@@ -72,8 +72,10 @@ export async function getSessionUser() {
   if (!session.user.actif) return null;
 
   // Glissement côté serveur : on repousse l'expiration à 30 jours.
+  // updateMany (et non update) pour ne pas lever si la session a disparu
+  // entre-temps (déconnexion concurrente, purge).
   const newExpiry = new Date(Date.now() + TTL_MS);
-  await prisma.session.update({
+  await prisma.session.updateMany({
     where: { id: session.id },
     data: { expiresAt: newExpiry },
   });

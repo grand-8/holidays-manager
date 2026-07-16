@@ -162,6 +162,9 @@ model FamilyRight {
   nombreSemaines      Int
   // Réponse explicite à « j'accepte le fractionnement » (défaut Non = protecteur, section 4.2).
   accepteFractionnement Boolean @default(false)
+  // Horodatage de soumission des préférences (null = pas encore répondu / brouillon).
+  // Distingue « a répondu ✅ » de « en attente ⏳ » (sections 4.2 & 4.3).
+  soumisLe            DateTime?
 
   cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])
