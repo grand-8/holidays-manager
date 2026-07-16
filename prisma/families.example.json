@@ -1,0 +1,12 @@
+{
+  "property": {
+    "nom": "Résidence familiale",
+    "jourBascule": 6
+  },
+  "families": [
+    { "nomAffiche": "Famille Dupont", "email": "dupont@example.com", "isAdmin": true },
+    { "nomAffiche": "Famille Martin", "email": "martin@example.com", "isAdmin": false },
+    { "nomAffiche": "Famille Bernard", "email": "bernard@example.com", "isAdmin": false },
+    { "nomAffiche": "Famille Petit", "email": "petit@example.com", "isAdmin": false }
+  ]
+}

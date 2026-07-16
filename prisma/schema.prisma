@@ -1,0 +1,312 @@
+// Schéma de données — Application de planification des vacances familiales
+// Référence : specification-app-vacances-familiales.md, section 7.
+// Toutes les entités sont rattachées à un Bien (Property) pour anticiper le multi-bien.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // URL avec pooling (PgBouncer) pour l'application (Neon).
+  url       = env("DATABASE_URL")
+  // Connexion directe pour les migrations Prisma (Neon).
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+// Statut d'un cycle annuel (section 4 + 7).
+enum CycleStatus {
+  config
+  collecte
+  collecte_tour2
+  generation
+  vote
+  mediation
+  cloture
+}
+
+// Origine d'un cycle : réellement géré par l'app, ou importé manuellement (section 5.1).
+enum CycleOrigin {
+  genere
+  importe
+}
+
+// Statut d'une préférence de semaine (section 4.2).
+enum PreferenceStatus {
+  preferee // 100 %
+  alternative // 70 %
+  non_coche // 40 % (défaut)
+  impossible // contrainte dure
+}
+
+// Qui a pris la décision finale (section 4.6).
+enum DecisionMaker {
+  auto
+  admin
+}
+
+// ---------------------------------------------------------------------------
+// Entités principales
+// ---------------------------------------------------------------------------
+
+// Le bien partagé (résidence). Entité racine (section 3).
+model Property {
+  id          String   @id @default(cuid())
+  nom         String
+  // Jour de bascule entre deux semaines (0 = dimanche ... 6 = samedi). Défaut : samedi.
+  jourBascule Int      @default(6)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users  User[]
+  cycles Cycle[]
+}
+
+// Une famille = un compte = un email unique (section 2).
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  nomAffiche  String
+  isAdmin     Boolean  @default(false)
+  // Une désactivation remplace toute suppression, afin de préserver l'historique.
+  actif       Boolean  @default(true)
+  propertyId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property       Property        @relation(fields: [propertyId], references: [id])
+  familyRights   FamilyRight[]
+  preferences    Preference[]
+  optOuts        OptOut[]
+  weekInterests  WeekInterest[]
+  assignments    ScheduleAssignment[]
+  votes          Vote[]
+  otpCodes       OtpCode[]
+  sessions       Session[]
+
+  @@index([propertyId])
+}
+
+// Session serveur (auth OTP). Invalidation côté serveur à la déconnexion (section 2).
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  // Le token brut n'est jamais stocké : on stocke son hachage.
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Code OTP à usage unique, stocké haché (section 2).
+model OtpCode {
+  id          String   @id @default(cuid())
+  userId      String
+  codeHash    String
+  expiresAt   DateTime
+  tentatives  Int      @default(0)
+  // Un code consommé ou invalidé n'est plus utilisable (une seule demande valide à la fois).
+  consumed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Un cycle = une itération annuelle pour un bien (section 4 + 7).
+model Cycle {
+  id                 String       @id @default(cuid())
+  propertyId         String
+  annee              Int
+  // Vides pour un cycle importé (section 5.1).
+  dateDebut          DateTime?
+  dateFin            DateTime?
+  deadlinePreferences DateTime?
+  deadlineVote       DateTime?
+  // Seuil de score minimum acceptable (défaut 40 %) — utilisé par le mode de secours.
+  seuilScoreMinimum  Int          @default(40)
+  statut             CycleStatus  @default(config)
+  origine            CycleOrigin  @default(genere)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  property     Property           @relation(fields: [propertyId], references: [id])
+  familyRights FamilyRight[]
+  weekSlots    WeekSlot[]
+  preferences  Preference[]
+  optOuts      OptOut[]
+  weekInterests WeekInterest[]
+  proposals    ScheduleProposal[]
+  votes        Vote[]
+  finalSchedule FinalSchedule?
+
+  // Un seul cycle par (bien, année) — importé ou non (section 5.1).
+  @@unique([propertyId, annee])
+  @@index([propertyId])
+}
+
+// Droit annuel d'une famille pour un cycle (section 4.1).
+model FamilyRight {
+  id                  String  @id @default(cuid())
+  cycleId             String
+  userId              String
+  // 1 ou 2 semaines.
+  nombreSemaines      Int
+  // Réponse explicite à « j'accepte le fractionnement » (défaut Non = protecteur, section 4.2).
+  accepteFractionnement Boolean @default(false)
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, userId])
+  @@index([cycleId])
+}
+
+// Une semaine louable (samedi → samedi) d'un cycle (section 4.1).
+model WeekSlot {
+  id        String   @id @default(cuid())
+  cycleId   String
+  dateDebut DateTime
+  dateFin   DateTime
+  ordre     Int
+
+  cycle         Cycle                @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  preferences   Preference[]
+  weekInterests WeekInterest[]
+  assignments   ScheduleAssignment[]
+
+  @@unique([cycleId, ordre])
+  @@index([cycleId])
+}
+
+// Préférence d'une famille pour une semaine (section 4.2).
+model Preference {
+  id         String           @id @default(cuid())
+  cycleId    String
+  userId     String
+  weekSlotId String
+  statut     PreferenceStatus @default(non_coche)
+  updatedAt  DateTime         @updatedAt
+
+  cycle    Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+  weekSlot WeekSlot @relation(fields: [weekSlotId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, userId, weekSlotId])
+  @@index([cycleId])
+  @@index([userId])
+}
+
+// Non-participation d'une famille pour un cycle (section 4.2).
+model OptOut {
+  id      String @id @default(cuid())
+  cycleId String
+  userId  String
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, userId])
+  @@index([cycleId])
+}
+
+// Manifestation d'intérêt pour une semaine non réclamée (section 4.9).
+model WeekInterest {
+  id         String   @id @default(cuid())
+  cycleId    String
+  weekSlotId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  cycle    Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  weekSlot WeekSlot @relation(fields: [weekSlotId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, weekSlotId, userId])
+  @@index([cycleId])
+}
+
+// Un planning proposé par l'algorithme (section 4.5).
+model ScheduleProposal {
+  id          String   @id @default(cuid())
+  cycleId     String
+  scoreGlobal Float
+  scoreMinimum Float
+  genereLe    DateTime @default(now())
+
+  cycle       Cycle                @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  assignments ScheduleAssignment[]
+  votes       Vote[]
+  finalSchedules FinalSchedule[]
+
+  @@index([cycleId])
+}
+
+// Une attribution semaine → famille au sein d'un planning proposé (section 4.5).
+model ScheduleAssignment {
+  id                 String  @id @default(cuid())
+  scheduleProposalId String
+  userId             String
+  weekSlotId         String
+  scoreIndividuel    Float
+  // Fractionnement forcé non volontaire → score forfaitaire 30 % (section 4.2).
+  fractionnementForce Boolean @default(false)
+
+  proposal ScheduleProposal @relation(fields: [scheduleProposalId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [userId], references: [id])
+  weekSlot WeekSlot         @relation(fields: [weekSlotId], references: [id])
+
+  @@index([scheduleProposalId])
+}
+
+// Vote d'une famille pour une proposition (section 4.6).
+model Vote {
+  id                 String   @id @default(cuid())
+  cycleId            String
+  scheduleProposalId String
+  userId             String
+  createdAt          DateTime @default(now())
+
+  cycle    Cycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  proposal ScheduleProposal @relation(fields: [scheduleProposalId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, userId])
+  @@index([cycleId])
+}
+
+// Le planning finalement retenu pour un cycle (section 4.6).
+model FinalSchedule {
+  id                 String        @id @default(cuid())
+  cycleId            String        @unique
+  // Nullable si médiation manuelle (pas de proposition algorithmique retenue).
+  scheduleProposalId String?
+  decidePar          DecisionMaker
+  commentaireAdmin   String?
+  createdAt          DateTime      @default(now())
+
+  cycle    Cycle             @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  proposal ScheduleProposal? @relation(fields: [scheduleProposalId], references: [id])
+}
+
+// Journal d'audit — strictement en ajout seul (insert-only, section 7).
+model AuditLog {
+  id             String   @id @default(cuid())
+  tableConcernee String
+  enregistrementId String
+  champ          String
+  ancienneValeur String?
+  nouvelleValeur String?
+  modifiePar     String
+  createdAt      DateTime @default(now())
+
+  @@index([tableConcernee, enregistrementId])
+}
