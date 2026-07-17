@@ -152,6 +152,13 @@ model Cycle {
   seuilScoreMinimum  Int          @default(40)
   statut             CycleStatus  @default(config)
   origine            CycleOrigin  @default(genere)
+  // Horodatage d'envoi des relances automatiques J-7/J-3 (section 6, items 3 & 6).
+  // Null = pas encore envoyée. Empêche les doublons ; réinitialisés au second
+  // tour et au redémarrage (nouvelle deadline = nouvelles relances).
+  relancePref7Le     DateTime?
+  relancePref3Le     DateTime?
+  relanceVote7Le     DateTime?
+  relanceVote3Le     DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 

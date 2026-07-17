@@ -22,6 +22,10 @@ const envSchema = z.object({
   // URL publique de l'application (pour construire les liens dans les emails).
   APP_URL: z.url(),
 
+  // Secret partagé protégeant la route de relances (Vercel Cron). Optionnel :
+  // s'il est absent, la route /api/cron/reminders refuse tout appel (503).
+  CRON_SECRET: z.string().min(16).optional(),
+
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 

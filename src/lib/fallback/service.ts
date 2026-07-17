@@ -74,7 +74,8 @@ export async function transitionToSecondRound(
     }),
     prisma.cycle.update({
       where: { id: cycleId },
-      data: { statut: "collecte_tour2" },
+      // Nouvelle deadline possible au second tour → réarme les relances préf.
+      data: { statut: "collecte_tour2", relancePref7Le: null, relancePref3Le: null },
     }),
   ]);
 

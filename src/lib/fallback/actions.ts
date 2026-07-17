@@ -221,7 +221,17 @@ export async function forceRestart(formData: FormData): Promise<void> {
       where: { cycleId },
       data: { soumisLe: null, accepteFractionnement: false },
     }),
-    prisma.cycle.update({ where: { id: cycleId }, data: { statut: "config" } }),
+    prisma.cycle.update({
+      where: { id: cycleId },
+      // Redémarrage à zéro → réarme toutes les relances (nouvelles deadlines).
+      data: {
+        statut: "config",
+        relancePref7Le: null,
+        relancePref3Le: null,
+        relanceVote7Le: null,
+        relanceVote3Le: null,
+      },
+    }),
   ]);
 
   revalidatePath("/admin");
