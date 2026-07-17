@@ -52,6 +52,9 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/historique">Historique</Link>
+          </Button>
           {user.isAdmin && (
             <Button asChild variant="outline" size="sm">
               <Link href="/admin">Administration</Link>
