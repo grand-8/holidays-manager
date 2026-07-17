@@ -30,9 +30,6 @@ export function GenerateButton({
       {state.status === "error" && (
         <p className="text-destructive text-sm">{state.message}</p>
       )}
-      {state.status === "fallback" && (
-        <p className="text-destructive text-sm">{state.message}</p>
-      )}
       <form action={action}>
         <input type="hidden" name="cycleId" value={cycleId} />
         <Button type="submit" disabled={pending}>

@@ -14,13 +14,25 @@ import { requireUser } from "@/lib/auth/current-user";
 const STATUTS = ["preferee", "alternative", "impossible", "non_coche"] as const;
 const statutSchema = z.enum(STATUTS);
 
-/** Récupère le cycle en collecte du bien de l'utilisateur, avec son droit. */
+/**
+ * Récupère le cycle en collecte du bien de l'utilisateur, avec son droit.
+ * Au second tour (spec section 4.7.1), seules les familles ciblées peuvent
+ * encore modifier : les autres sont verrouillées (contrôle côté serveur).
+ */
 async function getEditableCycle(userId: string, propertyId: string) {
   const cycle = await prisma.cycle.findFirst({
     where: { propertyId, statut: { in: ["collecte", "collecte_tour2"] } },
+    orderBy: { annee: "desc" },
     include: { weekSlots: { select: { id: true } } },
   });
   if (!cycle) return null;
+  if (cycle.statut === "collecte_tour2") {
+    const participant = await prisma.secondRoundParticipant.findUnique({
+      where: { cycleId_userId: { cycleId: cycle.id, userId } },
+      select: { id: true },
+    });
+    if (!participant) return null; // famille non ciblée : saisie verrouillée
+  }
   const right = await prisma.familyRight.findUnique({
     where: { cycleId_userId: { cycleId: cycle.id, userId } },
   });

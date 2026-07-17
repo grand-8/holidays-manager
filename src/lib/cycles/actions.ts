@@ -8,6 +8,11 @@ import { requireAdmin } from "@/lib/auth/current-user";
 import { computeWeekSlots } from "@/lib/scheduling/weeks";
 import { checkCoherence, getActiveCycle } from "./service";
 import { runGeneration } from "./generation";
+import {
+  analyzeFallback,
+  transitionToSecondRound,
+  transitionToMediation,
+} from "@/lib/fallback/service";
 import { sendInvitationEmail } from "@/lib/emails/invitation";
 import { sendProposalsReadyEmail } from "@/lib/emails/proposals";
 
@@ -217,15 +222,8 @@ export async function launchCollection(
 // --- Génération des plannings (§4.4 / §4.5) ----------------------------------
 
 export type GenerateState = {
-  status: "idle" | "error" | "fallback";
+  status: "idle" | "error";
   message?: string;
-};
-
-const FALLBACK_REASONS: Record<string, string> = {
-  aucune_combinaison: "aucune combinaison valide n'existe",
-  moins_de_deux: "moins de deux propositions réellement distinctes",
-  sous_seuil: "le meilleur score minimum est sous le seuil configuré",
-  timeout: "le délai de calcul a été dépassé",
 };
 
 /**
@@ -256,12 +254,29 @@ export async function generatePlannings(
   const result = await runGeneration(cycleId);
 
   if (result.status === "fallback") {
-    // Le mode de secours (§4.7) sera branché ultérieurement : on ne fige rien,
-    // le cycle reste en collecte et l'admin est informé de la raison.
-    return {
-      status: "fallback",
-      message: `Aucun planning satisfaisant : ${FALLBACK_REASONS[result.reason] ?? result.reason}. Ajustez les droits/préférences (le mode de secours arrivera ensuite).`,
-    };
+    // Mode de secours en cascade (spec section 4.7).
+    const alreadyDone = await prisma.secondRoundParticipant.count({
+      where: { cycleId },
+    });
+    const { concernedUserIds } = await analyzeFallback(cycleId);
+
+    // Premier échec en collecte, avec des familles à cibler → second tour ciblé
+    // (un seul second tour automatique par cycle).
+    if (
+      cycle.statut === "collecte" &&
+      alreadyDone === 0 &&
+      concernedUserIds.length > 0
+    ) {
+      await transitionToSecondRound(cycleId, cycle.annee, concernedUserIds);
+    } else {
+      // Sinon (échec après second tour, ou rien à recibler) → médiation admin.
+      await transitionToMediation(cycleId, cycle.annee, cycle.propertyId);
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/tableau-de-bord");
+    revalidatePath("/preferences");
+    redirect("/admin");
   }
 
   // Succès : le cycle est passé en « vote » ; on notifie les familles.

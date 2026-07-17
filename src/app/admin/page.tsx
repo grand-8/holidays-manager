@@ -15,10 +15,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getVoteData } from "@/lib/vote/service";
+import { getMediationData } from "@/lib/fallback/service";
+import { goToMediation, forceRestart } from "@/lib/fallback/actions";
 import { CreateCycleForm } from "./create-cycle-form";
 import { CycleConfig } from "./cycle-config";
 import { GenerateButton } from "./generate-button";
 import { AdminDecision } from "./admin-decision";
+import { MediationGrid } from "./mediation-grid";
 
 const STATUT_LABELS: Record<string, string> = {
   config: "Configuration",
@@ -66,9 +69,12 @@ export default async function AdminPage() {
           cycleId={cycle.id}
           propertyId={admin.propertyId}
           annee={cycle.annee}
+          statut={cycle.statut}
         />
       ) : cycle.statut === "vote" ? (
         <VoteAdminView cycleId={cycle.id} adminId={admin.id} annee={cycle.annee} />
+      ) : cycle.statut === "mediation" ? (
+        <MediationView cycleId={cycle.id} adminId={admin.id} annee={cycle.annee} />
       ) : (
         <section className="space-y-2">
           <p className="text-sm">
@@ -98,38 +104,7 @@ async function VoteAdminView({
   if (!data) return null;
 
   if (data.finalScheduleProposalId) {
-    const idx =
-      data.proposals.findIndex((p) => p.id === data.finalScheduleProposalId) + 1;
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Décision prise — {annee}</CardTitle>
-          <CardDescription>
-            Proposition {idx} retenue (
-            {data.finalDecidePar === "admin" ? "décision admin" : "issue du vote"}
-            ). Le planning est verrouillé.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {data.finalCommentaire && (
-            <p className="text-sm">
-              <span className="font-medium">Justification : </span>
-              {data.finalCommentaire}
-            </p>
-          )}
-          <form action={closeCycle}>
-            <input type="hidden" name="cycleId" value={cycleId} />
-            <Button type="submit" variant="outline">
-              Clôturer le cycle
-            </Button>
-          </form>
-          <p className="text-muted-foreground text-xs">
-            La clôture archive le cycle (il alimente alors l&apos;historique) et
-            permet d&apos;en démarrer un nouveau.
-          </p>
-        </CardContent>
-      </Card>
-    );
+    return <DecidedCard cycleId={cycleId} annee={annee} data={data} />;
   }
 
   return (
@@ -145,27 +120,149 @@ async function VoteAdminView({
   );
 }
 
-/** Vue de suivi + déclenchement de la génération (statut collecte). */
-async function CollecteView({
+/** Carte « décision prise » réutilisée par le vote (§4.6) et la médiation (§4.7). */
+function DecidedCard({
   cycleId,
-  propertyId,
+  annee,
+  data,
+}: {
+  cycleId: string;
+  annee: number;
+  data: NonNullable<Awaited<ReturnType<typeof getVoteData>>>;
+}) {
+  const idx =
+    data.proposals.findIndex((p) => p.id === data.finalScheduleProposalId) + 1;
+  const parVote = data.finalDecidePar !== "admin";
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Décision prise — {annee}</CardTitle>
+        <CardDescription>
+          {parVote
+            ? `Proposition ${idx} retenue (issue du vote).`
+            : "Planning arrêté (décision admin)."}{" "}
+          Le planning est verrouillé.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {data.finalCommentaire && (
+          <p className="text-sm">
+            <span className="font-medium">Justification : </span>
+            {data.finalCommentaire}
+          </p>
+        )}
+        <form action={closeCycle}>
+          <input type="hidden" name="cycleId" value={cycleId} />
+          <Button type="submit" variant="outline">
+            Clôturer le cycle
+          </Button>
+        </form>
+        <p className="text-muted-foreground text-xs">
+          La clôture archive le cycle (il alimente alors l&apos;historique) et
+          permet d&apos;en démarrer un nouveau.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Vue admin en médiation (spec section 4.7.2) : décidée, ou grille d'arbitrage. */
+async function MediationView({
+  cycleId,
+  adminId,
   annee,
 }: {
   cycleId: string;
-  propertyId: string;
+  adminId: string;
   annee: number;
 }) {
-  const rows = await getCompletion(cycleId, propertyId);
-  const done = rows.filter((r) => r.responded).length;
-  const allResponded = done === rows.length;
+  const voteData = await getVoteData(cycleId, adminId, true);
+  if (voteData?.finalScheduleProposalId) {
+    return <DecidedCard cycleId={cycleId} annee={annee} data={voteData} />;
+  }
+
+  const data = await getMediationData(cycleId);
+  if (!data) return null;
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Médiation — {annee}</CardTitle>
+          <CardDescription>
+            Aucun planning satisfaisant n&apos;a pu être généré. Attribuez
+            manuellement les semaines en vous appuyant sur les préférences
+            (visibles ci-dessous), avec une justification.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MediationGrid data={data} />
+        </CardContent>
+      </Card>
+
+      <RestartCard cycleId={cycleId} />
+    </div>
+  );
+}
+
+/** Bouton de redémarrage complet du cycle (spec section 4.7.3). */
+function RestartCard({ cycleId }: { cycleId: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Redémarrer le cycle</CardTitle>
+        <CardDescription>
+          Remet tout à zéro (préférences, propositions, décision) et repasse en
+          configuration. Vous pourrez ajuster la période puis relancer la
+          collecte (nouvelle invitation aux familles).
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={forceRestart}>
+          <input type="hidden" name="cycleId" value={cycleId} />
+          <Button type="submit" variant="destructive" size="sm">
+            Redémarrer à zéro
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Vue de suivi + déclenchement de la génération (statut collecte). */
+async function CollecteView({
+  cycleId,
+  propertyId,
+  annee,
+  statut,
+}: {
+  cycleId: string;
+  propertyId: string;
+  annee: number;
+  statut: string;
+}) {
+  const rows = await getCompletion(cycleId, propertyId);
+  const done = rows.filter((r) => r.responded).length;
+  const allResponded = done === rows.length;
+  const secondRound = statut === "collecte_tour2";
+
+  return (
+    <div className="space-y-6">
+      {secondRound && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+          <p className="font-medium">Second tour en cours</p>
+          <p className="text-muted-foreground mt-1">
+            Seules les familles concernées peuvent ajuster leurs préférences.
+            Relancez la génération une fois leurs réponses reçues ; en cas de
+            nouvel échec, le cycle passera en médiation.
+          </p>
+        </div>
+      )}
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">
-            Collecte {annee} — {done}/{rows.length} réponse
-            {rows.length > 1 ? "s" : ""}
+            {secondRound ? "Second tour" : "Collecte"} {annee} — {done}/
+            {rows.length} réponse{rows.length > 1 ? "s" : ""}
           </CardTitle>
           <CardDescription>
             Suivi des familles. Le détail des préférences reste masqué jusqu&apos;à
@@ -209,6 +306,32 @@ async function CollecteView({
           <GenerateButton cycleId={cycleId} allResponded={allResponded} />
         </CardContent>
       </Card>
+
+      {secondRound && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Débloquer manuellement</CardTitle>
+            <CardDescription>
+              Si le second tour n&apos;aboutit pas, passez en médiation (arbitrage
+              manuel) ou redémarrez le cycle depuis zéro.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <form action={goToMediation}>
+              <input type="hidden" name="cycleId" value={cycleId} />
+              <Button type="submit" variant="outline" size="sm">
+                Passer en médiation
+              </Button>
+            </form>
+            <form action={forceRestart}>
+              <input type="hidden" name="cycleId" value={cycleId} />
+              <Button type="submit" variant="destructive" size="sm">
+                Redémarrer à zéro
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -42,6 +42,15 @@ export default async function DashboardPage() {
     : [null, null];
   const aRepondu = optOut !== null || (right?.soumisLe ?? null) !== null;
 
+  // Second tour (spec section 4.7.1) : les familles non ciblées sont verrouillées.
+  const secondRoundLocked =
+    cycle?.statut === "collecte_tour2"
+      ? (await prisma.secondRoundParticipant.findUnique({
+          where: { cycleId_userId: { cycleId: cycle.id, userId: user.id } },
+          select: { id: true },
+        })) === null
+      : false;
+
   // Y a-t-il des semaines non réclamées disponibles (spec section 4.9) ?
   const decided = await getDecidedCycle(user.propertyId);
   const hasUnclaimed = decided
@@ -94,7 +103,17 @@ export default async function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {collecte ? (
+              {collecte && secondRoundLocked ? (
+                <>
+                  <p className="text-sm">
+                    Second tour en cours. Vos préférences sont verrouillées :
+                    seules les familles concernées peuvent les ajuster.
+                  </p>
+                  <Button asChild variant="outline">
+                    <Link href="/suivi">Voir qui a répondu</Link>
+                  </Button>
+                </>
+              ) : collecte ? (
                 <>
                   <p className="text-sm">
                     {aRepondu

@@ -85,6 +85,7 @@ model User {
   weekInterests  WeekInterest[]
   assignments    ScheduleAssignment[]
   freeWeekAssignments FreeWeekAssignment[]
+  secondRoundParticipations SecondRoundParticipant[]
   votes          Vote[]
   otpCodes       OtpCode[]
   sessions       Session[]
@@ -146,6 +147,7 @@ model Cycle {
   optOuts      OptOut[]
   weekInterests WeekInterest[]
   freeWeekAssignments FreeWeekAssignment[]
+  secondRoundParticipants SecondRoundParticipant[]
   proposals    ScheduleProposal[]
   votes        Vote[]
   finalSchedule FinalSchedule?
@@ -237,6 +239,23 @@ model WeekInterest {
   user     User     @relation(fields: [userId], references: [id])
 
   @@unique([cycleId, weekSlotId, userId])
+  @@index([cycleId])
+}
+
+// Famille ciblée par le second tour du mode de secours (section 4.7.1).
+// Seules ces familles peuvent ajuster leurs préférences en statut collecte_tour2 ;
+// la présence de lignes pour un cycle signale qu'un second tour a déjà eu lieu
+// (un seul second tour automatique par cycle).
+model SecondRoundParticipant {
+  id        String   @id @default(cuid())
+  cycleId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, userId])
   @@index([cycleId])
 }
 

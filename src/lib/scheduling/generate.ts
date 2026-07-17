@@ -84,8 +84,12 @@ function familyOptions(family: FamilyInput, available: number[]): number[][] {
   return options;
 }
 
-/** Calcule le score individuel d'une famille pour les semaines attribuées. */
-function scoreFamily(
+/**
+ * Calcule le score individuel d'une famille pour les semaines attribuées.
+ * Exporté pour la médiation (§4.7.2), qui note une attribution manuelle avec les
+ * mêmes règles que l'algorithme (fractionnement forcé → 30 %).
+ */
+export function scoreFamily(
   family: FamilyInput,
   weeks: number[],
 ): { score: number; forcedSplit: boolean } {
@@ -261,6 +265,18 @@ function selectProposals(
   // Ordonner le résultat final par score global décroissant (leximin).
   selected.sort(compareLeximin);
   return { status: "ok", proposals: selected };
+}
+
+/**
+ * Meilleure combinaison valide (classement leximin), ou null si aucune n'existe.
+ * Utilisée par le mode de secours (§4.7) pour identifier les familles dont le
+ * score serait sous le seuil et qui doivent être reciblées au second tour.
+ */
+export function bestCombination(input: GenerateInput): ScoredCombination | null {
+  if (input.families.length === 0) return null;
+  const { combinations } = enumerateCombinations(input);
+  if (combinations.length === 0) return null;
+  return [...combinations].sort(compareLeximin)[0];
 }
 
 /**
