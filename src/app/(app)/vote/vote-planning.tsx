@@ -6,6 +6,7 @@ import { Check, Star, Diamond, Loader2 } from "lucide-react";
 import { castVote, type CastVoteState } from "@/lib/vote/actions";
 import type { ProposalView, ProposalWeek } from "@/lib/vote/service";
 import { Button } from "@/components/ui/button";
+import { SavedNotice } from "@/components/saved-notice";
 import { cn } from "@/lib/utils";
 import { PlanningGrid, PlanningLegend, type GridFamily } from "./planning-grid";
 
@@ -45,6 +46,8 @@ export function VotePlanning({
   const bestGlobal = Math.max(...proposals.map((p) => p.globalScore));
   const bestMin = Math.max(...proposals.map((p) => p.minScore));
 
+  const votedIndex = proposals.findIndex((p) => p.id === myVoteProposalId);
+
   const current = proposals[selected];
   const families: GridFamily[] = current.families.map((f) => ({
     userId: f.userId,
@@ -67,6 +70,13 @@ export function VotePlanning({
           })}
           .
         </p>
+      )}
+
+      {votedIndex >= 0 && (
+        <SavedNotice>
+          Votre vote est enregistré&nbsp;: proposition {votedIndex + 1}. Vous
+          pouvez le modifier jusqu&apos;à l&apos;échéance.
+        </SavedNotice>
       )}
 
       {/* Sélecteur de propositions (score dans chaque bouton, 1 à 5). */}

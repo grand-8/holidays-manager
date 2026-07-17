@@ -172,6 +172,17 @@ async function ActiveDashboard({
     topGlobal = vd?.proposals[0]?.globalScore ?? null;
   }
 
+  // Notification admin (§4.3 / §4.6) : toutes les familles ont répondu / voté.
+  const familyCount = completion.length;
+  const allResponded =
+    inCollecte && familyCount > 0 && doneCount === familyCount;
+  let allVoted = false;
+  if (user.isAdmin && cycle.statut === "vote") {
+    const voteCount = await prisma.vote.count({ where: { cycleId: cycle.id } });
+    allVoted = familyCount > 0 && voteCount >= familyCount;
+  }
+  const adminReady = user.isAdmin && (allResponded || allVoted);
+
   const deadlineIso = inCollecte
     ? cycle.deadlinePreferences?.toISOString()
     : inVote
@@ -225,6 +236,27 @@ async function ActiveDashboard({
           {STATUT_LABELS[cycle.statut] ?? cycle.statut}
         </span>
       </div>
+
+      {adminReady && (
+        <div className="border-good/30 bg-good/10 flex flex-wrap items-center gap-3 rounded-xl border p-4">
+          <CheckCircle2 className="text-good size-5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-good text-sm font-semibold">
+              {allResponded
+                ? "Toutes les familles ont répondu."
+                : "Toutes les familles ont voté."}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {allResponded
+                ? "Vous pouvez lancer la génération des plannings."
+                : "Vous pouvez arrêter la décision."}
+            </p>
+          </div>
+          <Button asChild size="sm" className="ml-auto">
+            <Link href="/admin">Ouvrir l&apos;administration →</Link>
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         <MySituation

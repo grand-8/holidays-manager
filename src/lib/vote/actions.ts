@@ -68,18 +68,23 @@ export async function castVote(
  * 7 et 9). Les échecs d'envoi ne bloquent pas la décision.
  */
 async function notifyFinal(propertyId: string, cycleId: string, annee: number) {
-  const [users, unclaimedIds] = await Promise.all([
+  const [property, users, unclaimedIds] = await Promise.all([
+    prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { nom: true },
+    }),
     prisma.user.findMany({
       where: { propertyId, actif: true },
       select: { email: true },
     }),
     getUnclaimedWeekIds(cycleId),
   ]);
+  const lieu = property?.nom ?? "Vacances familiales";
   await Promise.allSettled(
     users.flatMap((u) => {
-      const mails = [sendFinalScheduleEmail(u.email, annee)];
+      const mails = [sendFinalScheduleEmail(u.email, annee, lieu)];
       if (unclaimedIds.length > 0) {
-        mails.push(sendUnclaimedWeeksEmail(u.email, annee));
+        mails.push(sendUnclaimedWeeksEmail(u.email, annee, lieu));
       }
       return mails;
     }),

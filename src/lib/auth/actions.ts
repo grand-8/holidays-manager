@@ -53,7 +53,10 @@ export async function requestOtp(
       "Si cette adresse correspond à un compte, un code vient d'être envoyé.",
   };
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { property: { select: { nom: true } } },
+  });
   if (!user || !user.actif) {
     return generic; // ne pas révéler l'absence/l'inactivité du compte
   }
@@ -83,7 +86,7 @@ export async function requestOtp(
   ]);
 
   try {
-    await sendOtpEmail(email, code);
+    await sendOtpEmail(email, code, user.property.nom);
   } catch {
     // On ne révèle pas l'échec d'envoi à l'utilisateur non plus.
     return generic;

@@ -210,7 +210,12 @@ export async function launchCollection(
   // Envoi de l'invitation à toutes les familles actives (échecs non bloquants).
   await Promise.allSettled(
     cycle.property.users.map((u) =>
-      sendInvitationEmail(u.email, cycle.annee, cycle.deadlinePreferences),
+      sendInvitationEmail(
+        u.email,
+        cycle.annee,
+        cycle.deadlinePreferences,
+        cycle.property.nom,
+      ),
     ),
   );
 
@@ -282,7 +287,7 @@ export async function generatePlannings(
   // Succès : le cycle est passé en « vote » ; on notifie les familles.
   await Promise.allSettled(
     cycle.property.users.map((u) =>
-      sendProposalsReadyEmail(u.email, cycle.annee),
+      sendProposalsReadyEmail(u.email, cycle.annee, cycle.property.nom),
     ),
   );
 

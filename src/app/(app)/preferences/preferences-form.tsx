@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { SavedNotice } from "@/components/saved-notice";
 import { cn } from "@/lib/utils";
 
 type Statut = "preferee" | "alternative" | "non_coche" | "impossible";
@@ -106,6 +107,9 @@ export function PreferencesForm(props: Props) {
   const [fractionnement, setFractionnement] = useState<string>(
     props.hasAnswered ? (props.accepteFractionnement ? "oui" : "non") : "",
   );
+  // Suivi « modifications non enregistrées » pour un retour visuel clair.
+  const [dirty, setDirty] = useState(false);
+  const [savedOnce, setSavedOnce] = useState(props.hasAnswered);
   const [saveState, saveAction, savePending] = useActionState(
     savePreferences,
     saveInitial,
@@ -114,9 +118,14 @@ export function PreferencesForm(props: Props) {
   useEffect(() => {
     if (saveState === seen.current) return;
     seen.current = saveState;
-    if (saveState.status === "saved")
+    if (saveState.status === "saved") {
       toast.success(saveState.message ?? "Préférences enregistrées.");
-    else if (saveState.status === "error")
+      // Réaction au résultat de la Server Action (source externe au rendu).
+      /* eslint-disable react-hooks/set-state-in-effect */
+      setDirty(false);
+      setSavedOnce(true);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    } else if (saveState.status === "error")
       toast.error(saveState.message ?? "Une erreur est survenue.");
   }, [saveState]);
 
@@ -174,9 +183,10 @@ export function PreferencesForm(props: Props) {
                 <Segmented
                   options={STATUT_OPTIONS}
                   value={statuts[w.id]}
-                  onChange={(v) =>
-                    setStatuts((s) => ({ ...s, [w.id]: v as Statut }))
-                  }
+                  onChange={(v) => {
+                    setStatuts((s) => ({ ...s, [w.id]: v as Statut }));
+                    setDirty(true);
+                  }}
                 />
               </div>
             ))}
@@ -204,16 +214,39 @@ export function PreferencesForm(props: Props) {
                   { value: "non", label: "Non" },
                 ]}
                 value={fractionnement}
-                onChange={setFractionnement}
+                onChange={(v) => {
+                  setFractionnement(v);
+                  setDirty(true);
+                }}
               />
             </CardContent>
           </Card>
         )}
 
-        <Button type="submit" disabled={savePending}>
-          {savePending && <Loader2 className="size-4 animate-spin" />}
-          {savePending ? "Enregistrement…" : "Enregistrer mes préférences"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" disabled={savePending || (savedOnce && !dirty)}>
+            {savePending && <Loader2 className="size-4 animate-spin" />}
+            {savePending
+              ? "Enregistrement…"
+              : savedOnce && !dirty
+                ? "Enregistré ✓"
+                : savedOnce
+                  ? "Enregistrer les modifications"
+                  : "Enregistrer mes préférences"}
+          </Button>
+          {dirty && savedOnce && (
+            <span className="text-muted-foreground text-sm">
+              Modifications non enregistrées.
+            </span>
+          )}
+        </div>
+
+        {savedOnce && !dirty && !savePending && (
+          <SavedNotice>
+            Vos préférences sont enregistrées. Vous pouvez les modifier jusqu&apos;à
+            la clôture.
+          </SavedNotice>
+        )}
       </form>
 
       <Card>

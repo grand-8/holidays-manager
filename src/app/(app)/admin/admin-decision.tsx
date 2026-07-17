@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 import {
   decideByVote,
   forceDecision,
@@ -27,9 +28,11 @@ const forceInitial: ForceDecisionState = { status: "idle" };
 export function AdminDecision({
   cycleId,
   proposals,
+  familyCount,
 }: {
   cycleId: string;
   proposals: ProposalTally[];
+  familyCount: number;
 }) {
   const [forcing, setForcing] = useState(false);
   const [forceState, forceAction, forcePending] = useActionState(
@@ -37,6 +40,7 @@ export function AdminDecision({
     forceInitial,
   );
   const totalVotes = proposals.reduce((s, p) => s + p.voteCount, 0);
+  const allVoted = familyCount > 0 && totalVotes >= familyCount;
 
   return (
     <Card>
@@ -44,11 +48,25 @@ export function AdminDecision({
         <CardTitle className="text-base">Décision</CardTitle>
         <CardDescription>
           {totalVotes} vote{totalVotes > 1 ? "s" : ""} reçu
-          {totalVotes > 1 ? "s" : ""}. La proposition avec le plus de votes
+          {totalVotes > 1 ? "s" : ""} sur {familyCount} famille
+          {familyCount > 1 ? "s" : ""}. La proposition avec le plus de votes
           l&apos;emporte (départage par score global).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {allVoted && (
+          <div className="border-good/30 bg-good/10 flex items-start gap-2.5 rounded-lg border p-3">
+            <CheckCircle2 className="text-good mt-0.5 size-5 shrink-0" />
+            <div className="text-sm">
+              <p className="text-good font-medium">
+                Toutes les familles ont voté.
+              </p>
+              <p className="text-muted-foreground mt-0.5">
+                Vous pouvez valider le résultat du vote.
+              </p>
+            </div>
+          </div>
+        )}
         <ul className="divide-y text-sm">
           {proposals.map((p) => (
             <li key={p.id} className="flex items-center justify-between py-2">

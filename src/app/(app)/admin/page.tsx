@@ -16,7 +16,9 @@ import {
 import { getVoteData } from "@/lib/vote/service";
 import { getMediationData } from "@/lib/fallback/service";
 import { goToMediation, forceRestart } from "@/lib/fallback/actions";
+import { CheckCircle2 } from "lucide-react";
 import { AdminTabs } from "@/components/admin-tabs";
+import { PropertyNameForm } from "@/components/property-name-form";
 import { CreateCycleForm } from "./create-cycle-form";
 import { CycleConfig } from "./cycle-config";
 import { GenerateButton } from "./generate-button";
@@ -35,12 +37,24 @@ const STATUT_LABELS: Record<string, string> = {
 
 export default async function AdminPage() {
   const admin = await requireAdmin();
-  const cycle = await getActiveCycle(admin.propertyId);
+  const [cycle, property] = await Promise.all([
+    getActiveCycle(admin.propertyId),
+    prisma.property.findUnique({
+      where: { id: admin.propertyId },
+      select: { nom: true },
+    }),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
       <h1 className="mb-1 text-xl font-semibold">Administration</h1>
       <AdminTabs />
+
+      {property && (
+        <div className="mb-6">
+          <PropertyNameForm nom={property.nom} />
+        </div>
+      )}
 
       {!cycle ? (
         <section className="space-y-4">
@@ -63,7 +77,12 @@ export default async function AdminPage() {
           statut={cycle.statut}
         />
       ) : cycle.statut === "vote" ? (
-        <VoteAdminView cycleId={cycle.id} adminId={admin.id} annee={cycle.annee} />
+        <VoteAdminView
+          cycleId={cycle.id}
+          adminId={admin.id}
+          annee={cycle.annee}
+          propertyId={admin.propertyId}
+        />
       ) : cycle.statut === "mediation" ? (
         <MediationView cycleId={cycle.id} adminId={admin.id} annee={cycle.annee} />
       ) : (
@@ -86,12 +105,17 @@ async function VoteAdminView({
   cycleId,
   adminId,
   annee,
+  propertyId,
 }: {
   cycleId: string;
   adminId: string;
   annee: number;
+  propertyId: string;
 }) {
-  const data = await getVoteData(cycleId, adminId, true);
+  const [data, familyCount] = await Promise.all([
+    getVoteData(cycleId, adminId, true),
+    prisma.user.count({ where: { propertyId, actif: true } }),
+  ]);
   if (!data) return null;
 
   if (data.finalScheduleProposalId) {
@@ -101,6 +125,7 @@ async function VoteAdminView({
   return (
     <AdminDecision
       cycleId={cycleId}
+      familyCount={familyCount}
       proposals={data.proposals.map((p, i) => ({
         id: p.id,
         index: i + 1,
@@ -239,6 +264,19 @@ async function CollecteView({
 
   return (
     <div className="space-y-6">
+      {allResponded && (
+        <div className="border-good/30 bg-good/10 flex items-start gap-2.5 rounded-lg border p-4">
+          <CheckCircle2 className="text-good mt-0.5 size-5 shrink-0" />
+          <div className="text-sm">
+            <p className="text-good font-medium">
+              Toutes les familles ont répondu.
+            </p>
+            <p className="text-muted-foreground mt-0.5">
+              Vous pouvez lancer la génération des plannings ci-dessous.
+            </p>
+          </div>
+        </div>
+      )}
       {secondRound && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/40">
           <p className="font-medium">Second tour en cours</p>

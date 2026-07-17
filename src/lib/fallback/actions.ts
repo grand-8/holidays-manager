@@ -167,18 +167,23 @@ export async function saveMediation(
   });
 
   // Notifie : planning final + éventuelles semaines non réclamées (§6.7 & §6.9).
-  const [users, unclaimedIds] = await Promise.all([
+  const [property, users, unclaimedIds] = await Promise.all([
+    prisma.property.findUnique({
+      where: { id: cycle.propertyId },
+      select: { nom: true },
+    }),
     prisma.user.findMany({
       where: { propertyId: cycle.propertyId, actif: true },
       select: { email: true },
     }),
     getUnclaimedWeekIds(cycleId),
   ]);
+  const lieu = property?.nom ?? "Vacances familiales";
   await Promise.allSettled(
     users.flatMap((u) => {
-      const mails = [sendFinalScheduleEmail(u.email, cycle.annee)];
+      const mails = [sendFinalScheduleEmail(u.email, cycle.annee, lieu)];
       if (unclaimedIds.length > 0) {
-        mails.push(sendUnclaimedWeeksEmail(u.email, cycle.annee));
+        mails.push(sendUnclaimedWeeksEmail(u.email, cycle.annee, lieu));
       }
       return mails;
     }),

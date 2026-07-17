@@ -79,11 +79,20 @@ export async function transitionToSecondRound(
     }),
   ]);
 
-  const users = await prisma.user.findMany({
-    where: { id: { in: concernedUserIds }, actif: true },
-    select: { email: true },
-  });
-  await Promise.allSettled(users.map((u) => sendSecondRoundEmail(u.email, annee)));
+  const [cycle, users] = await Promise.all([
+    prisma.cycle.findUnique({
+      where: { id: cycleId },
+      select: { property: { select: { nom: true } } },
+    }),
+    prisma.user.findMany({
+      where: { id: { in: concernedUserIds }, actif: true },
+      select: { email: true },
+    }),
+  ]);
+  const lieu = cycle?.property.nom ?? "Vacances familiales";
+  await Promise.allSettled(
+    users.map((u) => sendSecondRoundEmail(u.email, annee, lieu)),
+  );
 }
 
 /**
@@ -99,11 +108,20 @@ export async function transitionToMediation(
     where: { id: cycleId },
     data: { statut: "mediation" },
   });
-  const users = await prisma.user.findMany({
-    where: { propertyId, actif: true },
-    select: { email: true },
-  });
-  await Promise.allSettled(users.map((u) => sendMediationEmail(u.email, annee)));
+  const [property, users] = await Promise.all([
+    prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { nom: true },
+    }),
+    prisma.user.findMany({
+      where: { propertyId, actif: true },
+      select: { email: true },
+    }),
+  ]);
+  const lieu = property?.nom ?? "Vacances familiales";
+  await Promise.allSettled(
+    users.map((u) => sendMediationEmail(u.email, annee, lieu)),
+  );
 }
 
 /** La famille `userId` peut-elle saisir au second tour de ce cycle ? */

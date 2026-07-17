@@ -62,6 +62,7 @@ export async function runReminders(
       relancePref3Le: true,
       relanceVote7Le: true,
       relanceVote3Le: true,
+      property: { select: { nom: true } },
     },
   });
 
@@ -93,8 +94,8 @@ export async function runReminders(
     const results = await Promise.allSettled(
       recipients.map((email) =>
         isVote
-          ? sendVoteReminderEmail(email, cycle.annee, deadline)
-          : sendPreferenceReminderEmail(email, cycle.annee, deadline),
+          ? sendVoteReminderEmail(email, cycle.annee, deadline, cycle.property.nom)
+          : sendPreferenceReminderEmail(email, cycle.annee, deadline, cycle.property.nom),
       ),
     );
     summary.emailsEnvoyes += results.filter((r) => r.status === "fulfilled").length;
