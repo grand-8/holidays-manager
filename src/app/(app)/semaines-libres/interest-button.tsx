@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { toggleInterest, type InterestState } from "@/lib/unclaimed/actions";
 import { Button } from "@/components/ui/button";
 
@@ -15,9 +17,19 @@ export function InterestButton({
   interested: boolean;
 }) {
   const [state, action, pending] = useActionState(toggleInterest, initial);
+  const seen = useRef<InterestState>(initial);
+
+  useEffect(() => {
+    if (state === seen.current) return;
+    seen.current = state;
+    if (state.status === "saved")
+      toast.success(interested ? "Intérêt retiré." : "Intérêt enregistré.");
+    else if (state.status === "error")
+      toast.error(state.message ?? "Une erreur est survenue.");
+  }, [state, interested]);
 
   return (
-    <form action={action} className="flex items-center gap-2">
+    <form action={action}>
       <input type="hidden" name="weekSlotId" value={weekSlotId} />
       <Button
         type="submit"
@@ -25,15 +37,9 @@ export function InterestButton({
         variant={interested ? "outline" : "default"}
         disabled={pending}
       >
-        {pending
-          ? "…"
-          : interested
-            ? "Retirer mon intérêt"
-            : "Je suis intéressé"}
+        {pending && <Loader2 className="size-4 animate-spin" />}
+        {interested ? "Retirer mon intérêt" : "Je suis intéressé"}
       </Button>
-      {state.status === "error" && state.message && (
-        <span className="text-destructive text-xs">{state.message}</span>
-      )}
     </form>
   );
 }
