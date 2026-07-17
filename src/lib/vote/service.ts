@@ -22,6 +22,8 @@ export type ProposalFamily = {
 export type ProposalView = {
   id: string;
   globalScore: number;
+  /** Score minimum du planning (indicateur d'équité) — agrégé, n'identifie personne. */
+  minScore: number;
   families: ProposalFamily[];
   /** Score individuel de la famille courante, ou null (opt-out / non assignée). */
   myScore: number | null;
@@ -36,6 +38,13 @@ export type VoteData = {
   deadlineVote: string | null;
   myVoteProposalId: string | null;
   proposals: ProposalView[];
+  /** Toutes les semaines du cycle (colonnes de la grille), triées. */
+  weeks: ProposalWeek[];
+  /**
+   * Préférences de la famille courante par ordre de semaine (confidentialité §4.6 :
+   * seules SES préférences colorent la grille, jamais celles des autres).
+   */
+  myPrefs: Record<number, string>;
   finalScheduleProposalId: string | null;
   finalCommentaire: string | null;
   finalDecidePar: string | null;
@@ -50,6 +59,7 @@ export async function getVoteData(
   const cycle = await prisma.cycle.findUnique({
     where: { id: cycleId },
     include: {
+      weekSlots: { orderBy: { ordre: "asc" } },
       proposals: {
         orderBy: { scoreGlobal: "desc" },
         include: {
@@ -62,11 +72,26 @@ export async function getVoteData(
           votes: includeVoteCounts,
         },
       },
+      preferences: { where: { userId } },
       finalSchedule: true,
       votes: { where: { userId } },
     },
   });
   if (!cycle) return null;
+
+  // Colonnes de la grille = toutes les semaines du cycle.
+  const weeks: ProposalWeek[] = cycle.weekSlots.map((w) => ({
+    ordre: w.ordre,
+    dateDebut: w.dateDebut.toISOString(),
+    dateFin: w.dateFin.toISOString(),
+  }));
+  // Mes préférences par ordre (pour colorer ma seule ligne).
+  const ordreByWeekSlot = new Map(cycle.weekSlots.map((w) => [w.id, w.ordre]));
+  const myPrefs: Record<number, string> = {};
+  for (const p of cycle.preferences) {
+    const ordre = ordreByWeekSlot.get(p.weekSlotId);
+    if (ordre !== undefined) myPrefs[ordre] = p.statut;
+  }
 
   const proposals: ProposalView[] = cycle.proposals.map((p) => {
     // Regroupe les semaines par famille.
@@ -97,6 +122,7 @@ export async function getVoteData(
     return {
       id: p.id,
       globalScore: p.scoreGlobal,
+      minScore: p.scoreMinimum,
       families,
       myScore,
       voteCount: includeVoteCounts ? p.votes.length : undefined,
@@ -110,6 +136,8 @@ export async function getVoteData(
     deadlineVote: cycle.deadlineVote?.toISOString() ?? null,
     myVoteProposalId: cycle.votes[0]?.scheduleProposalId ?? null,
     proposals,
+    weeks,
+    myPrefs,
     finalScheduleProposalId: cycle.finalSchedule?.scheduleProposalId ?? null,
     finalCommentaire: cycle.finalSchedule?.commentaireAdmin ?? null,
     finalDecidePar: cycle.finalSchedule?.decidePar ?? null,
