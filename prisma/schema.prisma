@@ -84,6 +84,7 @@ model User {
   optOuts        OptOut[]
   weekInterests  WeekInterest[]
   assignments    ScheduleAssignment[]
+  freeWeekAssignments FreeWeekAssignment[]
   votes          Vote[]
   otpCodes       OtpCode[]
   sessions       Session[]
@@ -144,6 +145,7 @@ model Cycle {
   preferences  Preference[]
   optOuts      OptOut[]
   weekInterests WeekInterest[]
+  freeWeekAssignments FreeWeekAssignment[]
   proposals    ScheduleProposal[]
   votes        Vote[]
   finalSchedule FinalSchedule?
@@ -185,6 +187,7 @@ model WeekSlot {
   preferences   Preference[]
   weekInterests WeekInterest[]
   assignments   ScheduleAssignment[]
+  freeWeekAssignments FreeWeekAssignment[]
 
   @@unique([cycleId, ordre])
   @@index([cycleId])
@@ -234,6 +237,24 @@ model WeekInterest {
   user     User     @relation(fields: [userId], references: [id])
 
   @@unique([cycleId, weekSlotId, userId])
+  @@index([cycleId])
+}
+
+// Attribution manuelle d'une semaine non réclamée à une famille (section 4.9).
+// Entièrement séparée de l'algorithme (ScheduleAssignment) : n'influence aucun
+// score. Une semaine ne peut être attribuée qu'à une seule famille par cycle.
+model FreeWeekAssignment {
+  id         String   @id @default(cuid())
+  cycleId    String
+  weekSlotId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  cycle    Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  weekSlot WeekSlot @relation(fields: [weekSlotId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([cycleId, weekSlotId])
   @@index([cycleId])
 }
 

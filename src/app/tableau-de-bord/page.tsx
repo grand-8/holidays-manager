@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/current-user";
 import { logout } from "@/lib/auth/actions";
 import { getActiveCycle } from "@/lib/cycles/service";
+import { getDecidedCycle, getUnclaimedWeekIds } from "@/lib/unclaimed/service";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +42,12 @@ export default async function DashboardPage() {
     : [null, null];
   const aRepondu = optOut !== null || (right?.soumisLe ?? null) !== null;
 
+  // Y a-t-il des semaines non réclamées disponibles (spec section 4.9) ?
+  const decided = await getDecidedCycle(user.propertyId);
+  const hasUnclaimed = decided
+    ? (await getUnclaimedWeekIds(decided.id)).length > 0
+    : false;
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
       <div className="flex items-center justify-between">
@@ -52,6 +59,11 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {hasUnclaimed && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/semaines-libres">Semaines disponibles</Link>
+            </Button>
+          )}
           <Button asChild variant="ghost" size="sm">
             <Link href="/historique">Historique</Link>
           </Button>

@@ -7,7 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, requireAdmin } from "@/lib/auth/current-user";
 import { getActiveCycle } from "@/lib/cycles/service";
 import { pickWinner } from "./service";
+import { getUnclaimedWeekIds } from "@/lib/unclaimed/service";
 import { sendFinalScheduleEmail } from "@/lib/emails/final";
+import { sendUnclaimedWeeksEmail } from "@/lib/emails/unclaimed";
 
 /**
  * Vote et décision finale (spec section 4.6).
@@ -60,14 +62,27 @@ export async function castVote(
 
 // --- Décision (admin) --------------------------------------------------------
 
-/** Notifie toutes les familles actives du planning final (échecs non bloquants). */
-async function notifyFinal(propertyId: string, annee: number) {
-  const users = await prisma.user.findMany({
-    where: { propertyId, actif: true },
-    select: { email: true },
-  });
+/**
+ * Notifie toutes les familles actives : planning final confirmé, et — s'il reste
+ * des semaines non attribuées — leur mise à disposition (spec section 6, items
+ * 7 et 9). Les échecs d'envoi ne bloquent pas la décision.
+ */
+async function notifyFinal(propertyId: string, cycleId: string, annee: number) {
+  const [users, unclaimedIds] = await Promise.all([
+    prisma.user.findMany({
+      where: { propertyId, actif: true },
+      select: { email: true },
+    }),
+    getUnclaimedWeekIds(cycleId),
+  ]);
   await Promise.allSettled(
-    users.map((u) => sendFinalScheduleEmail(u.email, annee)),
+    users.flatMap((u) => {
+      const mails = [sendFinalScheduleEmail(u.email, annee)];
+      if (unclaimedIds.length > 0) {
+        mails.push(sendUnclaimedWeeksEmail(u.email, annee));
+      }
+      return mails;
+    }),
   );
 }
 
@@ -101,7 +116,7 @@ export async function decideByVote(formData: FormData): Promise<void> {
       decidePar: "auto",
     },
   });
-  await notifyFinal(cycle.propertyId, cycle.annee);
+  await notifyFinal(cycle.propertyId, cycle.id, cycle.annee);
 
   revalidatePath("/vote");
   revalidatePath("/admin");
@@ -160,7 +175,7 @@ export async function forceDecision(
       commentaireAdmin: parsed.data.commentaire,
     },
   });
-  await notifyFinal(cycle.propertyId, cycle.annee);
+  await notifyFinal(cycle.propertyId, cycle.id, cycle.annee);
 
   revalidatePath("/vote");
   revalidatePath("/admin");
