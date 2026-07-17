@@ -276,3 +276,32 @@ export async function generatePlannings(
   revalidatePath("/vote");
   redirect("/admin");
 }
+
+// --- Clôture du cycle (§4.8) --------------------------------------------------
+
+/**
+ * Clôture le cycle (spec section 4.8) : archivage. Les données restent en base
+ * et alimentent les statistiques (§5, recalculées à partir des cycles clôturés).
+ * Réservée à l'admin, après qu'une décision finale a été prise.
+ */
+export async function closeCycle(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const cycleId = String(formData.get("cycleId") ?? "");
+  const cycle = await prisma.cycle.findUnique({
+    where: { id: cycleId },
+    include: { finalSchedule: true },
+  });
+  if (!cycle || cycle.propertyId !== admin.propertyId) return;
+  // On ne clôture qu'un cycle décidé et pas déjà clôturé.
+  if (cycle.statut === "cloture" || !cycle.finalSchedule) return;
+
+  await prisma.cycle.update({
+    where: { id: cycle.id },
+    data: { statut: "cloture" },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/tableau-de-bord");
+  revalidatePath("/vote");
+  redirect("/admin");
+}

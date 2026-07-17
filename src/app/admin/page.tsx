@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/prisma";
 import { getActiveCycle, getCompletion } from "@/lib/cycles/service";
+import { closeCycle } from "@/lib/cycles/actions";
 import { getConfigHistory } from "@/lib/stats/history";
 import { computeWeekSlots } from "@/lib/scheduling/weeks";
 import { DEFAULT_SEUIL_SCORE_MINIMUM } from "@/lib/constants";
@@ -104,14 +105,24 @@ async function VoteAdminView({
             ). Le planning est verrouillé.
           </CardDescription>
         </CardHeader>
-        {data.finalCommentaire && (
-          <CardContent>
+        <CardContent className="space-y-4">
+          {data.finalCommentaire && (
             <p className="text-sm">
               <span className="font-medium">Justification : </span>
               {data.finalCommentaire}
             </p>
-          </CardContent>
-        )}
+          )}
+          <form action={closeCycle}>
+            <input type="hidden" name="cycleId" value={cycleId} />
+            <Button type="submit" variant="outline">
+              Clôturer le cycle
+            </Button>
+          </form>
+          <p className="text-muted-foreground text-xs">
+            La clôture archive le cycle (il alimente alors l&apos;historique) et
+            permet d&apos;en démarrer un nouveau.
+          </p>
+        </CardContent>
       </Card>
     );
   }
