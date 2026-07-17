@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
-import { Sun, Moon, LogOut, Palmtree } from "lucide-react";
+import { Sun, Moon, LogOut, Palmtree, Mail } from "lucide-react";
 import { logout } from "@/lib/auth/actions";
 import { cn } from "@/lib/utils";
 
@@ -135,7 +135,15 @@ function UserMenu({ user }: { user: NavUser }) {
           <div className="text-muted-foreground border-b px-2.5 py-2 text-xs">
             {user.email}
           </div>
-          <form action={logout} className="mt-1">
+          <Link
+            href="/compte"
+            onClick={() => setOpen(false)}
+            className="hover:bg-accent mt-1 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm"
+          >
+            <Mail className="size-4" />
+            Modifier mon e-mail
+          </Link>
+          <form action={logout} className="mt-0.5">
             <button
               type="submit"
               className="text-destructive hover:bg-accent flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm"

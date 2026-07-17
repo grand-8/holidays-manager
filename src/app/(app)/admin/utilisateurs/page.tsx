@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/prisma";
-import { Button } from "@/components/ui/button";
+import { AdminTabs } from "@/components/admin-tabs";
 import { UsersManager } from "./users-manager";
 
 export default async function UsersPage() {
@@ -19,13 +18,9 @@ export default async function UsersPage() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Familles</h1>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/admin">← Administration</Link>
-        </Button>
-      </div>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <h1 className="mb-1 text-xl font-semibold">Administration</h1>
+      <AdminTabs />
       <UsersManager users={users} currentUserId={admin.id} />
     </main>
   );

@@ -1,6 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import {
   createUser,
   toggleUser,
@@ -42,6 +44,25 @@ export function UsersManager({
     initial,
   );
 
+  const createSeen = useRef<UserActionState>(initial);
+  const toggleSeen = useRef<UserActionState>(initial);
+  useEffect(() => {
+    if (createState === createSeen.current) return;
+    createSeen.current = createState;
+    if (createState.status === "saved")
+      toast.success(createState.message ?? "Famille ajoutée.");
+    else if (createState.status === "error")
+      toast.error(createState.message ?? "Une erreur est survenue.");
+  }, [createState]);
+  useEffect(() => {
+    if (toggleState === toggleSeen.current) return;
+    toggleSeen.current = toggleState;
+    if (toggleState.status === "saved")
+      toast.success(toggleState.message ?? "Modifié.");
+    else if (toggleState.status === "error")
+      toast.error(toggleState.message ?? "Action impossible.");
+  }, [toggleState]);
+
   return (
     <div className="space-y-6">
       <Card>
@@ -65,7 +86,8 @@ export function UsersManager({
               />
             </div>
             <Button type="submit" disabled={createPending}>
-              {createPending ? "Ajout…" : "Ajouter"}
+              {createPending && <Loader2 className="size-4 animate-spin" />}
+              Ajouter
             </Button>
           </form>
           {createState.status !== "idle" && createState.message && (

@@ -89,8 +89,23 @@ model User {
   votes          Vote[]
   otpCodes       OtpCode[]
   sessions       Session[]
+  pendingEmailChange PendingEmailChange?
 
   @@index([propertyId])
+}
+
+// Changement d'adresse email en attente de confirmation par OTP (spec section 2).
+// Le nouvel email n'est appliqué qu'après validation d'un code envoyé DESSUS.
+model PendingEmailChange {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  newEmail   String
+  codeHash   String
+  expiresAt  DateTime
+  tentatives Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Session serveur (auth OTP). Invalidation côté serveur à la déconnexion (section 2).

@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { getHistoryGrid } from "@/lib/history/service";
-import { Button } from "@/components/ui/button";
+import { AdminTabs } from "@/components/admin-tabs";
 import { ImportGrid } from "./import-grid";
 
 export default async function ImportPage() {
@@ -9,13 +8,13 @@ export default async function ImportPage() {
   const grid = await getHistoryGrid(admin.propertyId);
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Historique — saisie</h1>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/historique">← Historique</Link>
-        </Button>
-      </div>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <h1 className="mb-1 text-xl font-semibold">Administration</h1>
+      <AdminTabs />
+      <p className="text-muted-foreground mb-4 text-sm">
+        Saisir ou corriger l&apos;historique des années passées (années × familles).
+        Toute modification est journalisée.
+      </p>
       <ImportGrid grid={grid} />
     </main>
   );

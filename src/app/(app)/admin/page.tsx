@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/prisma";
 import { getActiveCycle, getCompletion } from "@/lib/cycles/service";
@@ -17,6 +16,7 @@ import {
 import { getVoteData } from "@/lib/vote/service";
 import { getMediationData } from "@/lib/fallback/service";
 import { goToMediation, forceRestart } from "@/lib/fallback/actions";
+import { AdminTabs } from "@/components/admin-tabs";
 import { CreateCycleForm } from "./create-cycle-form";
 import { CycleConfig } from "./cycle-config";
 import { GenerateButton } from "./generate-button";
@@ -38,13 +38,9 @@ export default async function AdminPage() {
   const cycle = await getActiveCycle(admin.propertyId);
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Administration</h1>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/admin/utilisateurs">Familles</Link>
-        </Button>
-      </div>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6">
+      <h1 className="mb-1 text-xl font-semibold">Administration</h1>
+      <AdminTabs />
 
       {!cycle ? (
         <section className="space-y-4">
