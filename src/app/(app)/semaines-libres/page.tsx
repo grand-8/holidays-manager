@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/auth/current-user";
 import { getUnclaimedData } from "@/lib/unclaimed/service";
 import { assignFreeWeek, unassignFreeWeek } from "@/lib/unclaimed/actions";
@@ -26,12 +25,7 @@ export default async function UnclaimedPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Semaines disponibles</h1>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/tableau-de-bord">← Tableau de bord</Link>
-        </Button>
-      </div>
+      <h1 className="mb-6 text-xl font-semibold">Semaines disponibles</h1>
 
       {!data ? (
         <div className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">

@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/auth/current-user";
 import { getActiveCycle } from "@/lib/cycles/service";
 import { getVoteData } from "@/lib/vote/service";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -27,12 +25,7 @@ export default async function VotePage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Vote</h1>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/tableau-de-bord">← Tableau de bord</Link>
-        </Button>
-      </div>
+      <h1 className="mb-6 text-xl font-semibold">Vote</h1>
 
       {!data || data.proposals.length === 0 ? (
         <p className="text-muted-foreground text-sm">

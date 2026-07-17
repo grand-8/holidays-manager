@@ -18,16 +18,11 @@ export default async function HistoriquePage() {
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Historique</h1>
-        <div className="flex items-center gap-2">
-          {user.isAdmin && (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/admin/import">Saisir / corriger</Link>
-            </Button>
-          )}
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/tableau-de-bord">← Tableau de bord</Link>
+        {user.isAdmin && (
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/import">Saisir / corriger</Link>
           </Button>
-        </div>
+        )}
       </div>
 
       <Card>
