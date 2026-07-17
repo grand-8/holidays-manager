@@ -38,9 +38,14 @@ export default async function AdminPage() {
     <main className="mx-auto w-full max-w-3xl flex-1 p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Administration</h1>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/tableau-de-bord">← Tableau de bord</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/utilisateurs">Familles</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/tableau-de-bord">← Tableau de bord</Link>
+          </Button>
+        </div>
       </div>
 
       {!cycle ? (
