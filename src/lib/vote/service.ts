@@ -19,6 +19,8 @@ export type ProposalFamily = {
   userId: string;
   nomAffiche: string;
   weeks: ProposalWeek[];
+  /** Score individuel de la famille dans cette proposition (0–100). */
+  score: number;
 };
 
 export type ProposalView = {
@@ -115,6 +117,9 @@ export async function getVoteData(
           userId: a.userId,
           nomAffiche: a.user.nomAffiche,
           weeks: [],
+          // Le score individuel est identique sur toutes les semaines d'une
+          // même famille (§4.5) ; on le reprend tel quel.
+          score: a.scoreIndividuel,
         } satisfies ProposalFamily);
       fam.weeks.push({
         ordre: a.weekSlot.ordre,

@@ -53,7 +53,7 @@ export function VotePlanning({
     userId: f.userId,
     nomAffiche: f.nomAffiche,
     assigned: f.weeks.map((w) => w.ordre),
-    score: f.userId === myUserId ? current.myScore : null,
+    score: f.score,
   }));
   const votedThis = current.id === myVoteProposalId;
 

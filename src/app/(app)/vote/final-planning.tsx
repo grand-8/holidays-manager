@@ -22,7 +22,7 @@ export function FinalPlanning({
     userId: f.userId,
     nomAffiche: f.nomAffiche,
     assigned: f.weeks.map((w) => w.ordre),
-    score: f.userId === myUserId ? chosen.myScore : null,
+    score: f.score,
   }));
 
   return (

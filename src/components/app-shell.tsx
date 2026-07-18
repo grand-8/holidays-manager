@@ -17,7 +17,7 @@ export type NavUser = {
 const BASE_TABS = [
   { href: "/tableau-de-bord", label: "Tableau de bord" },
   { href: "/preferences", label: "Préférences" },
-  { href: "/vote", label: "Vote" },
+  { href: "/vote", label: "Planning" },
   { href: "/historique", label: "Historique" },
 ];
 

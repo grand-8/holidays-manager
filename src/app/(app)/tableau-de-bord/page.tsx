@@ -55,14 +55,20 @@ function daysUntil(iso: string): number {
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const cycle = await getActiveCycle(user.propertyId);
+  // Cycle actif + dernier cycle décidé, en parallèle (moins d'attente réseau).
+  const [cycle, decidedCycle] = await Promise.all([
+    getActiveCycle(user.propertyId),
+    getDecidedCycle(user.propertyId),
+  ]);
 
-  // Cycle décidé le plus récent (encore en vote ou déjà clôturé) : sert aux
-  // semaines non réclamées ET à afficher le planning validé sur le dashboard.
-  const decidedCycle = await getDecidedCycle(user.propertyId);
+  // Le planning validé n'est affiché ici que s'il n'y a pas de cycle actif, ou
+  // si le cycle actif EST le cycle décidé. Inutile de charger la grille (requête
+  // lourde) dans les autres cas.
+  const showPlanning =
+    !!decidedCycle && (!cycle || cycle.id === decidedCycle.id);
   const [unclaimedCount, decidedData, stats] = await Promise.all([
     decidedCycle ? getUnclaimedWeekIds(decidedCycle.id).then((w) => w.length) : 0,
-    decidedCycle ? getVoteData(decidedCycle.id, user.id) : null,
+    showPlanning ? getVoteData(decidedCycle.id, user.id) : null,
     getFamilyStats(user.propertyId),
   ]);
   const myStats = stats.find((s) => s.userId === user.id) ?? null;
@@ -202,10 +208,15 @@ async function ActiveDashboard({
     cycle.statut === "collecte_tour2" && participant === null;
   const doneCount = completion.filter((r) => r.responded).length;
 
+  // Meilleur score global : requête légère (pas besoin de charger tout le vote).
   let topGlobal: number | null = null;
   if (inVote) {
-    const vd = await getVoteData(cycle.id, user.id);
-    topGlobal = vd?.proposals[0]?.globalScore ?? null;
+    const best = await prisma.scheduleProposal.findFirst({
+      where: { cycleId: cycle.id },
+      orderBy: { scoreGlobal: "desc" },
+      select: { scoreGlobal: true },
+    });
+    topGlobal = best?.scoreGlobal ?? null;
   }
 
   // Notification admin (§4.3 / §4.6) : toutes les familles ont répondu / voté.

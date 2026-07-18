@@ -34,8 +34,8 @@ export default async function VotePage() {
               Comparer les propositions
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Vous voyez le planning complet, les préférences de chaque famille et
-              le score global ; seul votre score personnel reste privé.
+              Vous voyez le planning complet, les préférences et le taux de
+              satisfaction de chaque famille pour voter en toute transparence.
             </p>
           </div>
           <VotePlanning

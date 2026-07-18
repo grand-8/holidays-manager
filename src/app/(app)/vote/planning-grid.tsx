@@ -11,16 +11,22 @@ export type GridFamily = {
   score: number | null;
 };
 
-/** En-têtes de colonnes : jour + mois affiché une seule fois par mois. */
+/**
+ * En-têtes de colonnes : le mois (gris) au-dessus, affiché une seule fois par
+ * mois ; puis « S1 » (gris) + la plage jour début–fin en noir (ex. 20–27), pour
+ * rendre lisible la logique de semaine samedi → samedi.
+ */
 function columns(weeks: GridWeek[]) {
   let prevMon: string | null = null;
   return weeks.map((w) => {
     const d = new Date(w.dateDebut);
+    const end = new Date(w.dateFin);
     const day = d.getUTCDate();
+    const endDay = end.getUTCDate();
     const mon = d.toLocaleDateString("fr-FR", { month: "short", timeZone: "UTC" });
     const showMon = mon !== prevMon;
     prevMon = mon;
-    return { ordre: w.ordre, code: `S${w.ordre + 1}`, day, mon, showMon };
+    return { ordre: w.ordre, code: `S${w.ordre + 1}`, day, endDay, mon, showMon };
   });
 }
 
@@ -46,8 +52,9 @@ function satTone(score: number): string {
 /**
  * Matrice familles × semaines (spec section 4.5/4.6). Le ✓ marque la semaine
  * attribuée à chaque famille. Chaque ligne est colorée par les préférences de
- * SA famille (visibles après génération, §4.3, pour voter en connaissance de
- * cause). Confidentialité §4.6 : seul le score de la famille courante s'affiche.
+ * SA famille et affiche SON taux de satisfaction (transparence assumée pour
+ * aider au vote et à l'équité) ; la ligne de la famille courante est mise en
+ * gras.
  */
 export function PlanningGrid({
   weeks,
@@ -79,18 +86,17 @@ export function PlanningGrid({
               Famille
             </th>
             {cols.map((c) => (
-              <th key={c.ordre} className="border-b px-1 pb-2.5 text-center">
-                <div className="text-muted-foreground/70 text-[10px] font-semibold tracking-wide">
-                  {c.code}
+              <th key={c.ordre} className="border-b px-1 pb-2.5 text-center align-bottom">
+                <div className="text-muted-foreground/60 h-3.5 text-[10px] font-medium tracking-wide uppercase">
+                  {c.showMon ? c.mon : ""}
                 </div>
-                <div className="text-xs font-semibold">
-                  {c.day}
-                  {c.showMon && (
-                    <span className="text-muted-foreground font-medium">
-                      {" "}
-                      {c.mon}
-                    </span>
-                  )}
+                <div className="mt-0.5 text-xs">
+                  <span className="text-muted-foreground/60 font-medium">
+                    {c.code}
+                  </span>{" "}
+                  <span className="text-foreground font-semibold tabular-nums">
+                    {c.day}–{c.endDay}
+                  </span>
                 </div>
               </th>
             ))}
@@ -144,8 +150,13 @@ export function PlanningGrid({
                   );
                 })}
                 <td className="border-b text-center">
-                  {isMine && f.score !== null ? (
-                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums">
+                  {f.score !== null ? (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1.5 text-sm tabular-nums",
+                        isMine ? "font-semibold" : "font-medium",
+                      )}
+                    >
                       <span
                         className={cn(
                           "size-1.5 rounded-full",
