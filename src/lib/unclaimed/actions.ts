@@ -31,6 +31,10 @@ export async function toggleInterest(
   if (!decided) {
     return { status: "error", message: "Aucun planning décidé." };
   }
+  // Cycle clôturé : la fonction des semaines disponibles est fermée (§4.9).
+  if (decided.statut === "cloture") {
+    return { status: "error", message: "Le cycle est clôturé." };
+  }
   // La semaine doit appartenir au cycle décidé et être réellement disponible.
   const unclaimed = new Set(await getUnclaimedWeekIds(decided.id));
   if (!unclaimed.has(parsed.data.weekSlotId)) {
@@ -84,16 +88,19 @@ export async function assignFreeWeek(formData: FormData): Promise<void> {
 
   const decided = await getDecidedCycle(admin.propertyId);
   if (!decided || decided.id !== cycleId) return;
+  // Cycle clôturé : plus d'attribution possible (§4.9).
+  if (decided.statut === "cloture") return;
 
   const unclaimed = new Set(await getUnclaimedWeekIds(cycleId));
   if (!unclaimed.has(weekSlotId)) return;
 
-  // On n'attribue qu'à une famille ayant manifesté son intérêt (spec 4.9).
-  const interest = await prisma.weekInterest.findUnique({
-    where: { cycleId_weekSlotId_userId: { cycleId, weekSlotId, userId } },
+  // L'admin peut attribuer à n'importe quelle famille ACTIVE du bien, même sans
+  // manifestation d'intérêt préalable (attribution forcée, §4.9).
+  const target = await prisma.user.findFirst({
+    where: { id: userId, propertyId: admin.propertyId, actif: true },
     select: { id: true },
   });
-  if (!interest) return;
+  if (!target) return;
 
   await prisma.freeWeekAssignment.upsert({
     where: { cycleId_weekSlotId: { cycleId, weekSlotId } },
@@ -113,6 +120,8 @@ export async function unassignFreeWeek(formData: FormData): Promise<void> {
 
   const decided = await getDecidedCycle(admin.propertyId);
   if (!decided || decided.id !== cycleId) return;
+  // Cycle clôturé : les attributions sont figées (§4.9).
+  if (decided.statut === "cloture") return;
 
   await prisma.freeWeekAssignment.deleteMany({
     where: { cycleId, weekSlotId },

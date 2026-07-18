@@ -330,3 +330,32 @@ export async function closeCycle(formData: FormData): Promise<void> {
   revalidatePath("/vote");
   redirect("/admin");
 }
+
+// --- Suppression d'un cycle en cours -----------------------------------------
+
+/**
+ * Supprime entièrement un cycle NON clôturé et toutes ses données rattachées
+ * (semaines, droits, préférences, propositions, votes, décision — via cascade).
+ * Permet, en cas de problème, de repartir de zéro sur l'année : le couple
+ * (bien, année) est libéré et un nouveau cycle peut être recréé. Ne touche pas
+ * à l'historique (années clôturées ont leur propre suppression, §5.1).
+ */
+export async function deleteCycle(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const cycleId = String(formData.get("cycleId") ?? "");
+  const cycle = await prisma.cycle.findUnique({
+    where: { id: cycleId },
+    select: { propertyId: true, statut: true },
+  });
+  if (!cycle || cycle.propertyId !== admin.propertyId) return;
+  // Un cycle clôturé relève de l'historique : il ne se supprime pas ici.
+  if (cycle.statut === "cloture") return;
+
+  await prisma.cycle.delete({ where: { id: cycleId } });
+
+  revalidatePath("/admin");
+  revalidatePath("/tableau-de-bord");
+  revalidatePath("/vote");
+  revalidatePath("/preferences");
+  redirect("/admin");
+}

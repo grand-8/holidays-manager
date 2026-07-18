@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/prisma";
 import { getActiveCycle, getCompletion } from "@/lib/cycles/service";
-import { closeCycle } from "@/lib/cycles/actions";
+import { closeCycle, deleteCycle } from "@/lib/cycles/actions";
+import { ConfirmButton } from "@/components/confirm-button";
 import { getConfigHistory } from "@/lib/stats/history";
 import { computeWeekSlots } from "@/lib/scheduling/weeks";
 import { DEFAULT_SEUIL_SCORE_MINIMUM } from "@/lib/constants";
@@ -97,7 +99,42 @@ export default async function AdminPage() {
           </p>
         </section>
       )}
+
+      {cycle && cycle.statut !== "cloture" && (
+        <DangerZone cycleId={cycle.id} annee={cycle.annee} />
+      )}
     </main>
+  );
+}
+
+/** Zone de danger : suppression complète du cycle en cours (§ admin). */
+function DangerZone({ cycleId, annee }: { cycleId: string; annee: number }) {
+  return (
+    <Card className="border-destructive/30 mt-8">
+      <CardHeader>
+        <CardTitle className="text-destructive text-base">
+          Supprimer le cycle {annee}
+        </CardTitle>
+        <CardDescription>
+          Supprime définitivement ce cycle et toutes ses données (préférences,
+          propositions, votes, décision). À utiliser en cas de problème pour
+          repartir de zéro : vous pourrez ensuite recréer le cycle de
+          l&apos;année. Sans effet sur l&apos;historique des années clôturées.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={deleteCycle}>
+          <input type="hidden" name="cycleId" value={cycleId} />
+          <ConfirmButton
+            variant="destructive"
+            size="sm"
+            message={`Supprimer définitivement le cycle ${annee} et toutes ses données ? Cette action est irréversible.`}
+          >
+            Supprimer le cycle
+          </ConfirmButton>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -167,6 +204,13 @@ function DecidedCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <FinalPlanning data={data} myUserId={adminId} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/semaines-libres">
+              Gérer les semaines disponibles →
+            </Link>
+          </Button>
+        </div>
         <form action={closeCycle}>
           <input type="hidden" name="cycleId" value={cycleId} />
           <Button type="submit" variant="outline">
@@ -174,8 +218,9 @@ function DecidedCard({
           </Button>
         </form>
         <p className="text-muted-foreground text-xs">
-          La clôture archive le cycle (il alimente alors l&apos;historique) et
-          permet d&apos;en démarrer un nouveau.
+          La clôture archive le cycle (il alimente alors l&apos;historique),
+          ferme l&apos;attribution des semaines disponibles et permet d&apos;en
+          démarrer un nouveau.
         </p>
       </CardContent>
     </Card>

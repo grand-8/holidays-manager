@@ -49,6 +49,45 @@ export async function addImportYear(
 }
 
 /**
+ * Supprime une année d'historique (cycle clôturé) et toutes ses données
+ * rattachées (droits, via cascade). L'opération est journalisée dans l'AuditLog
+ * (qui reste, lui, insert-only). Réservée à l'admin.
+ *
+ * `cycleId` est passé par liaison (`bind`) et non via un champ de formulaire :
+ * le bouton de suppression vit dans le formulaire d'enregistrement de la grille,
+ * et un `name`/`value` propre entrerait en conflit avec l'encodage des Server
+ * Actions par React (mismatch d'hydratation).
+ */
+export async function deleteHistoryYear(cycleId: string): Promise<void> {
+  const admin = await requireAdmin();
+  if (!cycleId) return;
+
+  const cycle = await prisma.cycle.findUnique({
+    where: { id: cycleId },
+    select: { propertyId: true, statut: true, annee: true },
+  });
+  if (!cycle || cycle.propertyId !== admin.propertyId) return;
+  // Seules les années archivées (clôturées) se suppriment ici.
+  if (cycle.statut !== "cloture") return;
+
+  await prisma.$transaction(async (tx) => {
+    await logAudit(tx, {
+      tableConcernee: "Cycle",
+      enregistrementId: cycleId,
+      champ: "suppression",
+      ancienneValeur: String(cycle.annee),
+      nouvelleValeur: null,
+      modifiePar: admin.email,
+    });
+    await tx.cycle.delete({ where: { id: cycleId } });
+  });
+
+  revalidatePath("/admin/import");
+  revalidatePath("/historique");
+  revalidatePath("/tableau-de-bord");
+}
+
+/**
  * Enregistre la grille années × familles. Pour chaque cellule (cycle, famille) :
  * vide → pas de droit ; 1/2 → droit correspondant. Chaque changement effectif
  * est journalisé (ancienne/nouvelle valeur, qui, quand).

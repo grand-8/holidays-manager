@@ -1,13 +1,16 @@
 "use client";
 
 import { useActionState } from "react";
+import { Trash2 } from "lucide-react";
 import {
   addImportYear,
   saveHistory,
+  deleteHistoryYear,
   type HistoryState,
 } from "@/lib/history/actions";
 import type { HistoryGrid } from "@/lib/history/service";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/confirm-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -110,6 +113,9 @@ export function ImportGrid({ grid }: { grid: HistoryGrid }) {
                           {f.nomAffiche}
                         </th>
                       ))}
+                      <th className="py-2 pl-2">
+                        <span className="sr-only">Supprimer l&apos;année</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -137,6 +143,18 @@ export function ImportGrid({ grid }: { grid: HistoryGrid }) {
                             </select>
                           </td>
                         ))}
+                        <td className="py-2 pl-2 text-right">
+                          <ConfirmButton
+                            formAction={deleteHistoryYear.bind(null, y.cycleId)}
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Supprimer l'année ${y.annee}`}
+                            className="text-muted-foreground hover:text-destructive"
+                            message={`Supprimer définitivement l'année ${y.annee} de l'historique ? Cette action est irréversible.`}
+                          >
+                            <Trash2 className="size-4" />
+                          </ConfirmButton>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

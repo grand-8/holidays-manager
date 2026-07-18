@@ -2,13 +2,15 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { CalendarCheck, Loader2 } from "lucide-react";
 import {
   savePreferences,
   optOut,
   cancelOptOut,
   type SavePrefsState,
 } from "@/lib/preferences/actions";
+import { canTakeTwoWeeks } from "@/lib/scheduling/generate";
+import type { FamilyInput, PreferenceStatus } from "@/lib/scheduling/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -115,6 +117,38 @@ export function PreferencesForm(props: Props) {
     saveInitial,
   );
   const seen = useRef<SavePrefsState>(saveInitial);
+
+  // Une famille à 2 semaines peut-elle réellement en obtenir 2 avec ses choix
+  // actuels ? (mêmes règles que l'algorithme : §4.2/§4.5). Sinon, on lui demande
+  // de confirmer qu'elle accepte de n'avoir qu'une seule semaine.
+  const canGetTwoWeeks = (): boolean => {
+    if (nombreSemaines !== 2) return true;
+    const prefs: Record<number, PreferenceStatus> = {};
+    for (const w of weeks) {
+      const s = statuts[w.id];
+      if (s && s !== "non_coche") prefs[w.ordre] = s;
+    }
+    const fam: FamilyInput = {
+      id: "self",
+      rightWeeks: 2,
+      acceptsSplit: fractionnement === "oui",
+      prefs,
+    };
+    return canTakeTwoWeeks(fam, weeks.length);
+  };
+
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    if (nombreSemaines === 2 && !canGetTwoWeeks()) {
+      const ok = window.confirm(
+        "Vous avez droit à 2 semaines, mais vos choix actuels ne permettent d'en " +
+          "attribuer qu'une seule (pas assez de semaines possibles, ou deux " +
+          "semaines non consécutives sans accepter de les scinder).\n\n" +
+          "Confirmez-vous ne vouloir qu'une seule semaine cette année ?",
+      );
+      if (!ok) e.preventDefault();
+    }
+  };
+
   useEffect(() => {
     if (saveState === seen.current) return;
     seen.current = saveState;
@@ -154,7 +188,24 @@ export function PreferencesForm(props: Props) {
 
   return (
     <div className="space-y-6">
-      <form action={saveAction} className="space-y-6">
+      <div className="border-good/30 bg-good/10 flex items-center gap-2.5 rounded-lg border p-3.5 text-sm">
+        <CalendarCheck className="text-good size-4 shrink-0" />
+        <span>
+          Votre droit cette année :{" "}
+          <strong>
+            {nombreSemaines === 2 ? "2 semaines" : "1 semaine"}
+          </strong>
+          {nombreSemaines === 2 && (
+            <span className="text-muted-foreground">
+              {" "}
+              — vos choix doivent permettre d&apos;en attribuer deux, sinon une
+              seule vous sera proposée.
+            </span>
+          )}
+        </span>
+      </div>
+
+      <form action={saveAction} onSubmit={onSubmit} className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Semaines {annee}</CardTitle>
