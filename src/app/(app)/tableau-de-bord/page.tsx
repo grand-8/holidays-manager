@@ -12,8 +12,9 @@ import { requireUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/prisma";
 import { getActiveCycle, getCompletion } from "@/lib/cycles/service";
 import { getDecidedCycle, getUnclaimedWeekIds } from "@/lib/unclaimed/service";
-import { getVoteData } from "@/lib/vote/service";
+import { getVoteData, type VoteData } from "@/lib/vote/service";
 import { getFamilyStats } from "@/lib/stats/history";
+import { FinalPlanning } from "../vote/final-planning";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -56,25 +57,38 @@ export default async function DashboardPage() {
   const user = await requireUser();
   const cycle = await getActiveCycle(user.propertyId);
 
-  // Semaines non réclamées (rattachées au cycle décidé, pas au cycle actif).
-  const decided = await getDecidedCycle(user.propertyId);
-  const unclaimedCount = decided
-    ? (await getUnclaimedWeekIds(decided.id)).length
-    : 0;
-
-  const stats = await getFamilyStats(user.propertyId);
+  // Cycle décidé le plus récent (encore en vote ou déjà clôturé) : sert aux
+  // semaines non réclamées ET à afficher le planning validé sur le dashboard.
+  const decidedCycle = await getDecidedCycle(user.propertyId);
+  const [unclaimedCount, decidedData, stats] = await Promise.all([
+    decidedCycle ? getUnclaimedWeekIds(decidedCycle.id).then((w) => w.length) : 0,
+    decidedCycle ? getVoteData(decidedCycle.id, user.id) : null,
+    getFamilyStats(user.propertyId),
+  ]);
   const myStats = stats.find((s) => s.userId === user.id) ?? null;
+  const finalPlanning =
+    decidedData && decidedData.finalScheduleProposalId ? decidedData : null;
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
       {!cycle ? (
-        <NoCycle isAdmin={user.isAdmin} unclaimedCount={unclaimedCount} />
+        <NoCycle
+          isAdmin={user.isAdmin}
+          unclaimedCount={unclaimedCount}
+          finalPlanning={finalPlanning}
+          myUserId={user.id}
+        />
       ) : (
         <ActiveDashboard
           user={user}
           cycle={cycle}
           unclaimedCount={unclaimedCount}
           myStats={myStats}
+          finalPlanning={
+            finalPlanning && finalPlanning.cycleId === cycle.id
+              ? finalPlanning
+              : null
+          }
         />
       )}
     </main>
@@ -84,12 +98,32 @@ export default async function DashboardPage() {
 function NoCycle({
   isAdmin,
   unclaimedCount,
+  finalPlanning,
+  myUserId,
 }: {
   isAdmin: boolean;
   unclaimedCount: number;
+  finalPlanning: VoteData | null;
+  myUserId: string;
 }) {
   return (
     <div className="space-y-6">
+      {finalPlanning && (
+        <section className="space-y-4">
+          <div>
+            <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <CheckCircle2 className="text-good size-3.5" /> Planning validé
+            </p>
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">
+              Vacances {finalPlanning.annee}
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Le cycle est clôturé. Voici la répartition retenue.
+            </p>
+          </div>
+          <FinalPlanning data={finalPlanning} myUserId={myUserId} />
+        </section>
+      )}
       <div className="rounded-xl border border-dashed py-16 text-center">
         <div className="text-muted-foreground mx-auto mb-4 grid size-12 place-items-center rounded-xl border">
           <CalendarX2 className="size-5" />
@@ -123,11 +157,13 @@ async function ActiveDashboard({
   cycle,
   unclaimedCount,
   myStats,
+  finalPlanning,
 }: {
   user: Awaited<ReturnType<typeof requireUser>>;
   cycle: NonNullable<Awaited<ReturnType<typeof getActiveCycle>>>;
   unclaimedCount: number;
   myStats: Awaited<ReturnType<typeof getFamilyStats>>[number] | null;
+  finalPlanning: VoteData | null;
 }) {
   const inCollecte =
     cycle.statut === "collecte" || cycle.statut === "collecte_tour2";
@@ -177,7 +213,9 @@ async function ActiveDashboard({
   const allResponded =
     inCollecte && familyCount > 0 && doneCount === familyCount;
   let allVoted = false;
-  if (user.isAdmin && cycle.statut === "vote") {
+  // Une fois la décision prise (planning validé), on ne montre plus « tout le
+  // monde a voté » : la notification a fait son office.
+  if (user.isAdmin && cycle.statut === "vote" && !decided) {
     const voteCount = await prisma.vote.count({ where: { cycleId: cycle.id } });
     allVoted = familyCount > 0 && voteCount >= familyCount;
   }
@@ -256,6 +294,20 @@ async function ActiveDashboard({
             <Link href="/admin">Ouvrir l&apos;administration →</Link>
           </Button>
         </div>
+      )}
+
+      {finalPlanning && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <CheckCircle2 className="text-good size-3.5" /> Planning validé
+            </p>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/vote">Ouvrir le planning →</Link>
+            </Button>
+          </div>
+          <FinalPlanning data={finalPlanning} myUserId={user.id} />
+        </section>
       )}
 
       <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">

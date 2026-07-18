@@ -1,31 +1,30 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Vote as VoteIcon } from "lucide-react";
 import { requireUser } from "@/lib/auth/current-user";
 import { getActiveCycle } from "@/lib/cycles/service";
+import { getDecidedCycle } from "@/lib/unclaimed/service";
 import { getVoteData } from "@/lib/vote/service";
+import { getJourneyStage, voteEmptyMessage } from "@/lib/journey";
+import { EmptyState } from "@/components/empty-state";
 import { VotePlanning } from "./vote-planning";
-import {
-  PlanningGrid,
-  PlanningLegend,
-  type GridFamily,
-} from "./planning-grid";
+import { FinalPlanning } from "./final-planning";
 
 export default async function VotePage() {
   const user = await requireUser();
-  const cycle = await getActiveCycle(user.propertyId);
-  const data = cycle ? await getVoteData(cycle.id, user.id) : null;
+  // Cycle actif s'il y en a un ; sinon on retombe sur le dernier cycle décidé
+  // pour que le planning validé reste consultable après la clôture.
+  const active = await getActiveCycle(user.propertyId);
+  const cycleId =
+    active?.id ?? (await getDecidedCycle(user.propertyId))?.id ?? null;
+  const data = cycleId ? await getVoteData(cycleId, user.id) : null;
+
+  const canVote =
+    data && data.statut === "vote" && data.proposals.length > 0;
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
-      {!data || data.proposals.length === 0 ? (
-        <>
-          <h1 className="mb-6 text-xl font-semibold">Vote</h1>
-          <p className="text-muted-foreground text-sm">
-            Aucune proposition à voter pour le moment.
-          </p>
-        </>
-      ) : data.finalScheduleProposalId ? (
+      {data?.finalScheduleProposalId ? (
         <ResultView data={data} myUserId={user.id} />
-      ) : data.statut === "vote" ? (
+      ) : canVote ? (
         <>
           <div className="mb-5">
             <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
@@ -35,14 +34,14 @@ export default async function VotePage() {
               Comparer les propositions
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Vous voyez le planning complet et le score global ; votre score et
-              vos préférences n&apos;apparaissent que sur votre ligne.
+              Vous voyez le planning complet, les préférences de chaque famille et
+              le score global ; seul votre score personnel reste privé.
             </p>
           </div>
           <VotePlanning
             proposals={data.proposals}
             weeks={data.weeks}
-            myPrefs={data.myPrefs}
+            prefsByUser={data.prefsByUser}
             myUserId={user.id}
             myVoteProposalId={data.myVoteProposalId}
             deadline={data.deadlineVote}
@@ -51,12 +50,29 @@ export default async function VotePage() {
       ) : (
         <>
           <h1 className="mb-6 text-xl font-semibold">Vote</h1>
-          <p className="text-muted-foreground text-sm">
-            Le vote n&apos;est pas ouvert actuellement.
-          </p>
+          <VoteEmpty userId={user.id} propertyId={user.propertyId} />
         </>
       )}
     </main>
+  );
+}
+
+/** État vide contextuel du vote (selon l'étape du cycle). */
+async function VoteEmpty({
+  userId,
+  propertyId,
+}: {
+  userId: string;
+  propertyId: string;
+}) {
+  const msg = voteEmptyMessage(await getJourneyStage(userId, propertyId));
+  return (
+    <EmptyState
+      icon={<VoteIcon className="size-5" />}
+      title={msg.title}
+      description={msg.description}
+      cta={msg.cta}
+    />
   );
 }
 
@@ -72,13 +88,6 @@ function ResultView({
     (p) => p.id === data.finalScheduleProposalId,
   );
   if (!chosen) return null;
-
-  const families: GridFamily[] = chosen.families.map((f) => ({
-    userId: f.userId,
-    nomAffiche: f.nomAffiche,
-    assigned: f.weeks.map((w) => w.ordre),
-    score: f.userId === myUserId ? chosen.myScore : null,
-  }));
 
   return (
     <div className="space-y-5">
@@ -101,23 +110,7 @@ function ResultView({
         </div>
       </div>
 
-      <PlanningLegend />
-
-      <div className="bg-card rounded-xl border p-4 sm:p-5">
-        <PlanningGrid
-          weeks={data.weeks}
-          families={families}
-          myUserId={myUserId}
-          myPrefs={data.myPrefs}
-        />
-      </div>
-
-      {data.finalCommentaire && (
-        <div className="bg-card rounded-xl border p-4 text-sm">
-          <span className="font-medium">Commentaire de l&apos;administrateur : </span>
-          {data.finalCommentaire}
-        </div>
-      )}
+      <FinalPlanning data={data} myUserId={myUserId} />
     </div>
   );
 }

@@ -45,19 +45,21 @@ function satTone(score: number): string {
 
 /**
  * Matrice familles × semaines (spec section 4.5/4.6). Le ✓ marque la semaine
- * attribuée à chaque famille. Confidentialité : seule la ligne de la famille
- * courante est colorée par ses préférences, et seul son score est affiché.
+ * attribuée à chaque famille. Chaque ligne est colorée par les préférences de
+ * SA famille (visibles après génération, §4.3, pour voter en connaissance de
+ * cause). Confidentialité §4.6 : seul le score de la famille courante s'affiche.
  */
 export function PlanningGrid({
   weeks,
   families,
   myUserId,
-  myPrefs,
+  prefsByUser,
 }: {
   weeks: GridWeek[];
   families: GridFamily[];
   myUserId: string;
-  myPrefs: Record<number, string>;
+  /** userId → (ordre → statut de préférence). Colore la ligne de chaque famille. */
+  prefsByUser: Record<string, Record<number, string>>;
 }) {
   const cols = columns(weeks);
 
@@ -100,6 +102,7 @@ export function PlanningGrid({
         <tbody>
           {families.map((f) => {
             const isMine = f.userId === myUserId;
+            const famPrefs = prefsByUser[f.userId] ?? {};
             const assigned = new Set(f.assigned);
             return (
               <tr key={f.userId}>
@@ -117,7 +120,7 @@ export function PlanningGrid({
                 </td>
                 {cols.map((c) => {
                   const isAssigned = assigned.has(c.ordre);
-                  const tint = isMine ? prefBg(myPrefs[c.ordre]) : "";
+                  const tint = prefBg(famPrefs[c.ordre]);
                   return (
                     <td key={c.ordre} className="p-0">
                       <div
@@ -168,7 +171,7 @@ export function PlanningGrid({
 export function PlanningLegend() {
   return (
     <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-      <span className="text-muted-foreground/80">Vos préférences :</span>
+      <span className="text-muted-foreground/80">Préférences des familles :</span>
       <LegendItem className="bg-pref-bg" label="Préférée" />
       <LegendItem className="bg-alt-bg" label="Alternative" />
       <LegendItem className="bg-imp-bg" label="Impossible" />

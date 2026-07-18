@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildGenerateInput } from "@/lib/cycles/generation";
 import { bestCombination } from "@/lib/scheduling/generate";
@@ -90,8 +91,11 @@ export async function transitionToSecondRound(
     }),
   ]);
   const lieu = cycle?.property.nom ?? "Vacances familiales";
-  await Promise.allSettled(
-    users.map((u) => sendSecondRoundEmail(u.email, annee, lieu)),
+  // Notifications après la réponse : l'admin n'attend pas Resend.
+  after(() =>
+    Promise.allSettled(
+      users.map((u) => sendSecondRoundEmail(u.email, annee, lieu)),
+    ),
   );
 }
 
@@ -119,8 +123,10 @@ export async function transitionToMediation(
     }),
   ]);
   const lieu = property?.nom ?? "Vacances familiales";
-  await Promise.allSettled(
-    users.map((u) => sendMediationEmail(u.email, annee, lieu)),
+  after(() =>
+    Promise.allSettled(
+      users.map((u) => sendMediationEmail(u.email, annee, lieu)),
+    ),
   );
 }
 

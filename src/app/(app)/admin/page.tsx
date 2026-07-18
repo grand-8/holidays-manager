@@ -24,6 +24,7 @@ import { CycleConfig } from "./cycle-config";
 import { GenerateButton } from "./generate-button";
 import { AdminDecision } from "./admin-decision";
 import { MediationGrid } from "./mediation-grid";
+import { FinalPlanning } from "../vote/final-planning";
 
 const STATUT_LABELS: Record<string, string> = {
   config: "Configuration",
@@ -119,7 +120,9 @@ async function VoteAdminView({
   if (!data) return null;
 
   if (data.finalScheduleProposalId) {
-    return <DecidedCard cycleId={cycleId} annee={annee} data={data} />;
+    return (
+      <DecidedCard cycleId={cycleId} annee={annee} data={data} adminId={adminId} />
+    );
   }
 
   return (
@@ -141,10 +144,12 @@ function DecidedCard({
   cycleId,
   annee,
   data,
+  adminId,
 }: {
   cycleId: string;
   annee: number;
   data: NonNullable<Awaited<ReturnType<typeof getVoteData>>>;
+  adminId: string;
 }) {
   const idx =
     data.proposals.findIndex((p) => p.id === data.finalScheduleProposalId) + 1;
@@ -161,12 +166,7 @@ function DecidedCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {data.finalCommentaire && (
-          <p className="text-sm">
-            <span className="font-medium">Justification : </span>
-            {data.finalCommentaire}
-          </p>
-        )}
+        <FinalPlanning data={data} myUserId={adminId} />
         <form action={closeCycle}>
           <input type="hidden" name="cycleId" value={cycleId} />
           <Button type="submit" variant="outline">
@@ -194,7 +194,14 @@ async function MediationView({
 }) {
   const voteData = await getVoteData(cycleId, adminId, true);
   if (voteData?.finalScheduleProposalId) {
-    return <DecidedCard cycleId={cycleId} annee={annee} data={voteData} />;
+    return (
+      <DecidedCard
+        cycleId={cycleId}
+        annee={annee}
+        data={voteData}
+        adminId={adminId}
+      />
+    );
   }
 
   const data = await getMediationData(cycleId);

@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireAdmin } from "@/lib/auth/current-user";
 import { getActiveCycle } from "@/lib/cycles/service";
@@ -121,7 +122,7 @@ export async function decideByVote(formData: FormData): Promise<void> {
       decidePar: "auto",
     },
   });
-  await notifyFinal(cycle.propertyId, cycle.id, cycle.annee);
+  after(() => notifyFinal(cycle.propertyId, cycle.id, cycle.annee));
 
   revalidatePath("/vote");
   revalidatePath("/admin");
@@ -180,7 +181,7 @@ export async function forceDecision(
       commentaireAdmin: parsed.data.commentaire,
     },
   });
-  await notifyFinal(cycle.propertyId, cycle.id, cycle.annee);
+  after(() => notifyFinal(cycle.propertyId, cycle.id, cycle.annee));
 
   revalidatePath("/vote");
   revalidatePath("/admin");

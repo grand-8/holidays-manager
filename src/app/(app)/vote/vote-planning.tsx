@@ -15,14 +15,14 @@ const initial: CastVoteState = { status: "idle" };
 export function VotePlanning({
   proposals,
   weeks,
-  myPrefs,
+  prefsByUser,
   myUserId,
   myVoteProposalId,
   deadline,
 }: {
   proposals: ProposalView[];
   weeks: ProposalWeek[];
-  myPrefs: Record<number, string>;
+  prefsByUser: Record<string, Record<number, string>>;
   myUserId: string;
   myVoteProposalId: string | null;
   deadline: string | null;
@@ -130,7 +130,7 @@ export function VotePlanning({
             weeks={weeks}
             families={families}
             myUserId={myUserId}
-            myPrefs={myPrefs}
+            prefsByUser={prefsByUser}
           />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-4 border-t p-4 sm:px-5">

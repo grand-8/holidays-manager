@@ -1,20 +1,30 @@
+import { CalendarClock } from "lucide-react";
 import { requireUser } from "@/lib/auth/current-user";
 import { getPreferencesContext } from "@/lib/preferences/service";
+import { getJourneyStage, preferencesEmptyMessage } from "@/lib/journey";
+import { EmptyState } from "@/components/empty-state";
 import { PreferencesForm } from "./preferences-form";
 
 export default async function PreferencesPage() {
   const user = await requireUser();
   const ctx = await getPreferencesContext(user.id, user.propertyId);
+  const empty =
+    !ctx || !ctx.right
+      ? preferencesEmptyMessage(await getJourneyStage(user.id, user.propertyId))
+      : null;
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
       <h1 className="mb-6 text-xl font-semibold">Mes préférences</h1>
 
-      {!ctx || !ctx.right ? (
-        <p className="text-muted-foreground text-sm">
-          Aucune collecte de préférences n&apos;est en cours pour le moment.
-        </p>
-      ) : ctx.secondRoundLocked ? (
+      {empty ? (
+        <EmptyState
+          icon={<CalendarClock className="size-5" />}
+          title={empty.title}
+          description={empty.description}
+          cta={empty.cta}
+        />
+      ) : !ctx || !ctx.right ? null : ctx.secondRoundLocked ? (
         <div className="rounded-lg border border-dashed p-6 text-sm">
           <p className="font-medium">Second tour en cours.</p>
           <p className="text-muted-foreground mt-1">

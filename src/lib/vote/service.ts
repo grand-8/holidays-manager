@@ -2,9 +2,11 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Données du vote (spec section 4.6).
- * Confidentialité : une famille voit le planning complet (qui a quelle semaine)
- * et le score GLOBAL de chaque proposition, mais uniquement SON propre score
- * individuel — jamais celui des autres familles.
+ * Confidentialité : une famille voit le planning complet (qui a quelle semaine),
+ * le score GLOBAL de chaque proposition et les PRÉFÉRENCES de toutes les familles
+ * (rendues visibles après la génération, §4.3 — utile pour voter en connaissance
+ * de cause), mais uniquement SON propre score individuel — jamais celui des
+ * autres familles.
  */
 
 export type ProposalWeek = {
@@ -41,10 +43,15 @@ export type VoteData = {
   /** Toutes les semaines du cycle (colonnes de la grille), triées. */
   weeks: ProposalWeek[];
   /**
-   * Préférences de la famille courante par ordre de semaine (confidentialité §4.6 :
-   * seules SES préférences colorent la grille, jamais celles des autres).
+   * Préférences de la famille courante par ordre de semaine (compat + légende).
    */
   myPrefs: Record<number, string>;
+  /**
+   * Préférences de TOUTES les familles : userId → (ordre → statut). Colore chaque
+   * ligne de la grille par les préférences de la famille correspondante (§4.6 —
+   * visibles après génération, aide au vote). Les scores restent privés.
+   */
+  prefsByUser: Record<string, Record<number, string>>;
   finalScheduleProposalId: string | null;
   finalCommentaire: string | null;
   finalDecidePar: string | null;
@@ -72,7 +79,7 @@ export async function getVoteData(
           votes: includeVoteCounts,
         },
       },
-      preferences: { where: { userId } },
+      preferences: true,
       finalSchedule: true,
       votes: { where: { userId } },
     },
@@ -85,13 +92,16 @@ export async function getVoteData(
     dateDebut: w.dateDebut.toISOString(),
     dateFin: w.dateFin.toISOString(),
   }));
-  // Mes préférences par ordre (pour colorer ma seule ligne).
+  // Préférences de toutes les familles par ordre de semaine (pour colorer
+  // chaque ligne de la grille). Les scores restent, eux, privés.
   const ordreByWeekSlot = new Map(cycle.weekSlots.map((w) => [w.id, w.ordre]));
-  const myPrefs: Record<number, string> = {};
+  const prefsByUser: Record<string, Record<number, string>> = {};
   for (const p of cycle.preferences) {
     const ordre = ordreByWeekSlot.get(p.weekSlotId);
-    if (ordre !== undefined) myPrefs[ordre] = p.statut;
+    if (ordre === undefined) continue;
+    (prefsByUser[p.userId] ??= {})[ordre] = p.statut;
   }
+  const myPrefs: Record<number, string> = prefsByUser[userId] ?? {};
 
   const proposals: ProposalView[] = cycle.proposals.map((p) => {
     // Regroupe les semaines par famille.
@@ -138,6 +148,7 @@ export async function getVoteData(
     proposals,
     weeks,
     myPrefs,
+    prefsByUser,
     finalScheduleProposalId: cycle.finalSchedule?.scheduleProposalId ?? null,
     finalCommentaire: cycle.finalSchedule?.commentaireAdmin ?? null,
     finalDecidePar: cycle.finalSchedule?.decidePar ?? null,

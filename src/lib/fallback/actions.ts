@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { scoreFamily } from "@/lib/scheduling/generate";
@@ -179,14 +180,17 @@ export async function saveMediation(
     getUnclaimedWeekIds(cycleId),
   ]);
   const lieu = property?.nom ?? "Vacances familiales";
-  await Promise.allSettled(
-    users.flatMap((u) => {
-      const mails = [sendFinalScheduleEmail(u.email, cycle.annee, lieu)];
-      if (unclaimedIds.length > 0) {
-        mails.push(sendUnclaimedWeeksEmail(u.email, cycle.annee, lieu));
-      }
-      return mails;
-    }),
+  const annee = cycle.annee;
+  after(() =>
+    Promise.allSettled(
+      users.flatMap((u) => {
+        const mails = [sendFinalScheduleEmail(u.email, annee, lieu)];
+        if (unclaimedIds.length > 0) {
+          mails.push(sendUnclaimedWeeksEmail(u.email, annee, lieu));
+        }
+        return mails;
+      }),
+    ),
   );
 
   revalidatePath("/admin");

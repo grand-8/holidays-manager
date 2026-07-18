@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/current-user";
 import { computeWeekSlots } from "@/lib/scheduling/weeks";
@@ -207,14 +208,15 @@ export async function launchCollection(
     data: { statut: "collecte" },
   });
 
-  // Envoi de l'invitation à toutes les familles actives (échecs non bloquants).
-  await Promise.allSettled(
-    cycle.property.users.map((u) =>
-      sendInvitationEmail(
-        u.email,
-        cycle.annee,
-        cycle.deadlinePreferences,
-        cycle.property.nom,
+  // Envoi de l'invitation à toutes les familles actives, APRÈS la réponse
+  // (`after`) : l'admin n'attend pas les allers-retours Resend (échecs non
+  // bloquants). Le cycle est déjà passé en collecte ci-dessus.
+  const { users, nom: lieu } = cycle.property;
+  const { annee, deadlinePreferences } = cycle;
+  after(() =>
+    Promise.allSettled(
+      users.map((u) =>
+        sendInvitationEmail(u.email, annee, deadlinePreferences, lieu),
       ),
     ),
   );
@@ -284,10 +286,13 @@ export async function generatePlannings(
     redirect("/admin");
   }
 
-  // Succès : le cycle est passé en « vote » ; on notifie les familles.
-  await Promise.allSettled(
-    cycle.property.users.map((u) =>
-      sendProposalsReadyEmail(u.email, cycle.annee, cycle.property.nom),
+  // Succès : le cycle est passé en « vote » ; on notifie les familles après la
+  // réponse (`after`) pour ne pas bloquer l'admin sur l'envoi des e-mails.
+  const { users, nom: lieu } = cycle.property;
+  const annee = cycle.annee;
+  after(() =>
+    Promise.allSettled(
+      users.map((u) => sendProposalsReadyEmail(u.email, annee, lieu)),
     ),
   );
 
