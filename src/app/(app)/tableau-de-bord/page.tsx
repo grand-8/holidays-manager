@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  AlertTriangle,
   CalendarClock,
   CalendarX2,
   CheckCircle2,
@@ -66,8 +67,13 @@ export default async function DashboardPage() {
   // lourde) dans les autres cas.
   const showPlanning =
     !!decidedCycle && (!cycle || cycle.id === decidedCycle.id);
+  // Les semaines disponibles ne se pilotent que tant que le cycle décidé n'est
+  // pas clôturé (fonction fermée après clôture, §4.9).
+  const unclaimedOpen = !!decidedCycle && decidedCycle.statut !== "cloture";
   const [unclaimedCount, decidedData, stats] = await Promise.all([
-    decidedCycle ? getUnclaimedWeekIds(decidedCycle.id).then((w) => w.length) : 0,
+    unclaimedOpen
+      ? getUnclaimedWeekIds(decidedCycle.id).then((w) => w.length)
+      : 0,
     showPlanning ? getVoteData(decidedCycle.id, user.id) : null,
     getFamilyStats(user.propertyId),
   ]);
@@ -175,7 +181,7 @@ async function ActiveDashboard({
     cycle.statut === "collecte" || cycle.statut === "collecte_tour2";
   const inVote = cycle.statut === "vote" || cycle.statut === "mediation";
 
-  const [completion, right, optOut, myVote, finalSchedule, participant] =
+  const [completion, right, optOut, myVote, finalSchedule, secondRoundParticipants] =
     await Promise.all([
       getCompletion(cycle.id, user.propertyId),
       prisma.familyRight.findUnique({
@@ -195,17 +201,24 @@ async function ActiveDashboard({
         select: { id: true },
       }),
       cycle.statut === "collecte_tour2"
-        ? prisma.secondRoundParticipant.findUnique({
-            where: { cycleId_userId: { cycleId: cycle.id, userId: user.id } },
-            select: { id: true },
+        ? prisma.secondRoundParticipant.findMany({
+            where: { cycleId: cycle.id },
+            select: { userId: true },
           })
-        : Promise.resolve(null),
+        : Promise.resolve([]),
     ]);
 
   const decided = finalSchedule !== null;
   const responded = optOut !== null || (right?.soumisLe ?? null) !== null;
+  // Second tour (§4.7.1) : familles ciblées (doivent ré-ajuster) et celles encore
+  // en attente parmi elles. Les autres familles sont verrouillées à ce tour.
+  const participantIds = new Set(secondRoundParticipants.map((p) => p.userId));
+  const iAmParticipant = participantIds.has(user.id);
   const secondRoundLocked =
-    cycle.statut === "collecte_tour2" && participant === null;
+    cycle.statut === "collecte_tour2" && !iAmParticipant;
+  const pendingParticipants = completion.filter(
+    (r) => participantIds.has(r.userId) && !r.responded,
+  ).length;
   const doneCount = completion.filter((r) => r.responded).length;
 
   // Meilleur score global : requête légère (pas besoin de charger tout le vote).
@@ -285,6 +298,14 @@ async function ActiveDashboard({
           {STATUT_LABELS[cycle.statut] ?? cycle.statut}
         </span>
       </div>
+
+      {cycle.statut === "collecte_tour2" && (
+        <SecondRoundBanner
+          iAmParticipant={iAmParticipant}
+          responded={responded}
+          pending={pendingParticipants}
+        />
+      )}
 
       {adminReady && (
         <div className="border-good/30 bg-good/10 flex flex-wrap items-center gap-3 rounded-xl border p-4">
@@ -441,6 +462,58 @@ async function ActiveDashboard({
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/** Bandeau ambre du second tour (§4.7.1), différencié selon le rôle de la famille. */
+function SecondRoundBanner({
+  iAmParticipant,
+  responded,
+  pending,
+}: {
+  iAmParticipant: boolean;
+  responded: boolean;
+  pending: number;
+}) {
+  let title: string;
+  let body: string;
+  let cta: { href: string; label: string } | null = null;
+
+  if (iAmParticipant && !responded) {
+    title = "Second tour — votre ajustement est requis";
+    body =
+      "Aucun planning satisfaisant n'a été trouvé au premier tour. Ajustez vos préférences sur les semaines en tension pour aider à dégager une solution.";
+    cta = { href: "/preferences", label: "Ajuster mes préférences →" };
+  } else if (iAmParticipant && responded) {
+    title = "Second tour — préférences ajustées";
+    body =
+      pending > 0
+        ? `Merci. En attente de ${pending} autre${pending > 1 ? "s" : ""} famille${pending > 1 ? "s" : ""} avant la nouvelle génération.`
+        : "Merci. Toutes les familles concernées ont répondu ; la nouvelle génération peut être lancée.";
+  } else {
+    // Famille verrouillée (non concernée par le second tour).
+    title = "Second tour en cours";
+    body =
+      pending > 0
+        ? `${pending} famille${pending > 1 ? "s" : ""} doi${pending > 1 ? "vent" : "t"} ajuster leurs préférences avant la nouvelle génération. Vos préférences restent inchangées.`
+        : "Les familles concernées ont toutes répondu ; la nouvelle génération peut être lancée. Vos préférences restent inchangées.";
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
+      <AlertTriangle className="size-5 shrink-0 text-amber-600 dark:text-amber-500" />
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+          {title}
+        </p>
+        <p className="text-muted-foreground text-sm">{body}</p>
+      </div>
+      {cta && (
+        <Button asChild size="sm" className="ml-auto">
+          <Link href={cta.href}>{cta.label}</Link>
+        </Button>
+      )}
     </div>
   );
 }

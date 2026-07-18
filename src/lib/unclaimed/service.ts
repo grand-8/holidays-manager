@@ -30,6 +30,10 @@ export type UnclaimedData = {
   cycleId: string;
   annee: number;
   statut: string;
+  /** Cycle clôturé : la fonction est fermée (plus d'intérêt ni d'attribution). */
+  closed: boolean;
+  /** Toutes les familles actives — pour l'attribution forcée par l'admin (§4.9). */
+  allFamilies: UnclaimedFamily[];
   weeks: UnclaimedWeek[];
 };
 
@@ -79,23 +83,30 @@ export async function getUnclaimedData(
   const decided = await getDecidedCycle(propertyId);
   if (!decided) return null;
 
-  const cycle = await prisma.cycle.findUnique({
-    where: { id: decided.id },
-    include: {
-      weekSlots: { orderBy: { ordre: "asc" } },
-      finalSchedule: {
-        include: {
-          proposal: { include: { assignments: { select: { weekSlotId: true } } } },
+  const [cycle, familyRows] = await Promise.all([
+    prisma.cycle.findUnique({
+      where: { id: decided.id },
+      include: {
+        weekSlots: { orderBy: { ordre: "asc" } },
+        finalSchedule: {
+          include: {
+            proposal: { include: { assignments: { select: { weekSlotId: true } } } },
+          },
+        },
+        freeWeekAssignments: {
+          include: { user: { select: { id: true, nomAffiche: true } } },
+        },
+        weekInterests: {
+          include: { user: { select: { id: true, nomAffiche: true } } },
         },
       },
-      freeWeekAssignments: {
-        include: { user: { select: { id: true, nomAffiche: true } } },
-      },
-      weekInterests: {
-        include: { user: { select: { id: true, nomAffiche: true } } },
-      },
-    },
-  });
+    }),
+    prisma.user.findMany({
+      where: { propertyId, actif: true },
+      orderBy: { nomAffiche: "asc" },
+      select: { id: true, nomAffiche: true },
+    }),
+  ]);
   if (!cycle) return null;
 
   const assigned = new Set(
@@ -135,6 +146,11 @@ export async function getUnclaimedData(
     cycleId: cycle.id,
     annee: cycle.annee,
     statut: cycle.statut,
+    closed: cycle.statut === "cloture",
+    allFamilies: familyRows.map((f) => ({
+      userId: f.id,
+      nomAffiche: f.nomAffiche,
+    })),
     weeks,
   };
 }

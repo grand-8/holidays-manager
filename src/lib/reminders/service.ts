@@ -62,6 +62,9 @@ export async function runReminders(
       relancePref3Le: true,
       relanceVote7Le: true,
       relanceVote3Le: true,
+      // Une décision déjà prise (planning retenu) coupe court aux relances de
+      // vote : la phase est terminée même si le cycle n'est pas encore clôturé.
+      finalSchedule: { select: { id: true } },
       property: { select: { nom: true } },
     },
   });
@@ -75,6 +78,8 @@ export async function runReminders(
 
   for (const cycle of cycles) {
     const isVote = cycle.statut === "vote";
+    // Décision déjà arrêtée pendant le vote (avant clôture) : plus de relance.
+    if (isVote && cycle.finalSchedule) continue;
     const deadline = isVote ? cycle.deadlineVote : cycle.deadlinePreferences;
     if (!deadline) continue;
 

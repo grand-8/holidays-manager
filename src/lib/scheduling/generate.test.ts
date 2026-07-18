@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generateSchedules, compareLeximin } from "./generate";
-import type { GenerateInput, ScoredCombination } from "./types";
+import { generateSchedules, compareLeximin, canTakeTwoWeeks } from "./generate";
+import type { GenerateInput, FamilyInput, ScoredCombination } from "./types";
 
 /** Petit utilitaire : construit une entrée avec valeurs par défaut. */
 function input(partial: Partial<GenerateInput>): GenerateInput {
@@ -90,26 +90,65 @@ test("fractionnement volontaire (deux 'préférée') : noté normalement, pas 30
   assert.deepEqual([...a.weeks].sort(), [0, 2]);
 });
 
-test("contrainte 'impossible' + refus de split → aucune combinaison (secours)", () => {
+test("canTakeTwoWeeks : reflète les contraintes propres de la famille", () => {
+  const fam = (p: Partial<FamilyInput>): FamilyInput => ({
+    id: "A",
+    rightWeeks: 2,
+    acceptsSplit: false,
+    prefs: {},
+    ...p,
+  });
+  // Droit à 1 semaine → jamais éligible à 2.
+  assert.equal(canTakeTwoWeeks(fam({ rightWeeks: 1 }), 3), false);
+  // Deux semaines libres adjacentes → oui.
+  assert.equal(canTakeTwoWeeks(fam({}), 3), true);
+  // Une seule semaine utilisable (le reste impossible) → non.
+  assert.equal(
+    canTakeTwoWeeks(fam({ prefs: { 1: "impossible", 2: "impossible" } }), 3),
+    false,
+  );
+  // Deux semaines utilisables mais non contiguës, sans acceptation du split → non.
+  assert.equal(canTakeTwoWeeks(fam({ prefs: { 1: "impossible" } }), 3), false);
+  // Idem mais les deux « préférée » (split volontaire) → oui.
+  assert.equal(
+    canTakeTwoWeeks(
+      fam({ prefs: { 0: "preferee", 1: "impossible", 2: "preferee" } }),
+      3,
+    ),
+    true,
+  );
+  // Idem mais la famille accepte le fractionnement → oui.
+  assert.equal(
+    canTakeTwoWeeks(fam({ acceptsSplit: true, prefs: { 1: "impossible" } }), 3),
+    true,
+  );
+});
+
+test("2 semaines sans appariement valide → famille ramenée à 1 semaine", () => {
+  // A a droit à 2 semaines, mais week1 est impossible et A refuse le split :
+  // l'appariement {0,2} est non contigu et non volontaire → invalide. Plutôt que
+  // de faire échouer le cycle, A doit recevoir une seule semaine (spec §4.2).
   const result = generateSchedules(
     input({
       weekCount: 3,
       families: [
-        // week1 impossible ; A refuse le split ; seul appariement possible {0,2}
-        // est non contigu et non volontaire → invalide.
         {
           id: "A",
           rightWeeks: 2,
           acceptsSplit: false,
-          prefs: { 0: "non_coche", 1: "impossible", 2: "non_coche" },
+          prefs: { 0: "preferee", 1: "impossible", 2: "non_coche" },
         },
+        { id: "B", rightWeeks: 1, acceptsSplit: false, prefs: { 2: "preferee" } },
       ],
     }),
   );
 
-  assert.equal(result.status, "fallback");
-  if (result.status !== "fallback") return;
-  assert.equal(result.reason, "aucune_combinaison");
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  const a = result.proposals[0].assignments.find((x) => x.familyId === "A");
+  assert.ok(a, "A doit être placée");
+  assert.equal(a.weeks.length, 1, "A ne reçoit qu'une semaine");
+  assert.equal(a.forcedSplit, false);
 });
 
 test("départage leximin : à global égal, la répartition la plus équitable gagne", () => {

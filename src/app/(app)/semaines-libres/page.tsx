@@ -32,6 +32,12 @@ export default async function UnclaimedPage() {
           Aucun planning n&apos;a encore été décidé. Les semaines disponibles
           apparaîtront ici une fois la répartition arrêtée.
         </div>
+      ) : data.closed ? (
+        <div className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+          Le cycle {data.annee} est clôturé : l&apos;attribution des semaines
+          disponibles est terminée. Le planning validé reste consultable depuis le
+          tableau de bord.
+        </div>
       ) : data.weeks.length === 0 ? (
         <div className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
           Toutes les semaines de {data.annee} ont été attribuées. Aucune semaine
@@ -81,7 +87,7 @@ export default async function UnclaimedPage() {
                       weekSlotId={w.weekSlotId}
                       interested={w.iAmInterested}
                     />
-                    {user.isAdmin && w.interested.length > 0 && (
+                    {user.isAdmin && data.allFamilies.length > 0 && (
                       <form
                         action={assignFreeWeek}
                         className="flex flex-wrap items-center gap-2 border-t pt-3"
@@ -98,14 +104,22 @@ export default async function UnclaimedPage() {
                         />
                         <select
                           name="userId"
-                          defaultValue={w.interested[0].userId}
+                          defaultValue={
+                            w.interested[0]?.userId ?? data.allFamilies[0].userId
+                          }
                           className="border-input bg-background h-9 rounded-md border px-2 text-sm"
                         >
-                          {w.interested.map((f) => (
-                            <option key={f.userId} value={f.userId}>
-                              {f.nomAffiche}
-                            </option>
-                          ))}
+                          {data.allFamilies.map((f) => {
+                            const keen = w.interested.some(
+                              (i) => i.userId === f.userId,
+                            );
+                            return (
+                              <option key={f.userId} value={f.userId}>
+                                {f.nomAffiche}
+                                {keen ? " (intéressé·e)" : ""}
+                              </option>
+                            );
+                          })}
                         </select>
                         <Button type="submit" size="sm" variant="secondary">
                           Attribuer

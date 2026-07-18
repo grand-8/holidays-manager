@@ -48,24 +48,14 @@ function isContiguous(weeks: number[]): boolean {
 }
 
 /**
- * Énumère toutes les attributions de semaines valides pour UNE famille prise
- * isolément, parmi les semaines encore disponibles.
+ * Appariements de 2 semaines valides pour une famille, parmi les semaines
+ * `usable` (déjà filtrées des « impossible »).
  *
- * Contraintes (spec section 4.5, étape 1) :
- *  - (b) aucune semaine « impossible » ne lui est attribuée ;
- *  - (c) un fractionnement (2 semaines non consécutives) n'est possible que si la
- *        famille accepte le fractionnement, ou si les deux semaines sont
- *        elles-mêmes marquées « préférée ».
+ * Contrainte (spec section 4.5, étape 1c) : un bloc contigu est toujours
+ * autorisé ; un fractionnement (2 semaines non consécutives) l'est seulement si
+ * la famille l'accepte, ou s'il est volontaire (les deux semaines « préférée »).
  */
-function familyOptions(family: FamilyInput, available: number[]): number[][] {
-  const usable = available.filter(
-    (w) => statusOf(family, w) !== "impossible",
-  );
-
-  if (family.rightWeeks === 1) {
-    return usable.map((w) => [w]);
-  }
-
+function pairOptions(family: FamilyInput, usable: number[]): number[][] {
   const options: number[][] = [];
   for (let i = 0; i < usable.length; i++) {
     for (let j = i + 1; j < usable.length; j++) {
@@ -74,14 +64,52 @@ function familyOptions(family: FamilyInput, available: number[]): number[][] {
       const bothPreferred =
         statusOf(family, pair[0]) === "preferee" &&
         statusOf(family, pair[1]) === "preferee";
-      // (c) : un bloc contigu est toujours autorisé ; un fractionnement l'est
-      // seulement si accepté, ou volontairement demandé (deux « préférée »).
       if (contiguous || family.acceptsSplit || bothPreferred) {
         options.push(pair);
       }
     }
   }
   return options;
+}
+
+/**
+ * Une famille ayant droit à 2 semaines peut-elle réellement en obtenir 2, compte
+ * tenu de SES seules contraintes (semaines « impossible », refus de scinder) —
+ * indépendamment de la concurrence des autres familles (spec section 4.2) ?
+ *
+ * Sert (1) à l'algorithme, qui rétrograde à 1 semaine une famille sans aucun
+ * appariement valide au lieu de basculer tout le cycle en secours, et (2) au
+ * formulaire de préférences, qui demande alors confirmation à la famille.
+ */
+export function canTakeTwoWeeks(family: FamilyInput, weekCount: number): boolean {
+  if (family.rightWeeks !== 2) return false;
+  const usable = Array.from({ length: weekCount }, (_, i) => i).filter(
+    (w) => statusOf(family, w) !== "impossible",
+  );
+  return pairOptions(family, usable).length > 0;
+}
+
+/**
+ * Énumère toutes les attributions de semaines valides pour UNE famille prise
+ * isolément, parmi les semaines encore disponibles, pour le nombre de semaines
+ * effectivement visé (1 ou 2 ; une famille à 2 semaines sans appariement possible
+ * est ramenée à 1, spec section 4.2).
+ *
+ * Contrainte (b) : aucune semaine « impossible » ne lui est attribuée.
+ */
+function familyOptions(
+  family: FamilyInput,
+  available: number[],
+  weeksWanted: 1 | 2,
+): number[][] {
+  const usable = available.filter(
+    (w) => statusOf(family, w) !== "impossible",
+  );
+
+  if (weeksWanted === 1) {
+    return usable.map((w) => [w]);
+  }
+  return pairOptions(family, usable);
 }
 
 /**
@@ -179,6 +207,13 @@ function enumerateCombinations(
   // sauf pour la disponibilité, filtrée à la volée pendant le backtracking).
   const order = [...families];
 
+  // Nombre de semaines effectivement visé par famille : une famille à 2 semaines
+  // dont les contraintes propres interdisent tout appariement est ramenée à 1
+  // (spec section 4.2) plutôt que de faire échouer tout le cycle.
+  const weeksWanted = new Map<string, 1 | 2>(
+    families.map((f) => [f.id, canTakeTwoWeeks(f, weekCount) ? 2 : 1]),
+  );
+
   const used = new Set<number>();
   const current: Assignment[] = [];
 
@@ -194,7 +229,7 @@ function enumerateCombinations(
     }
     const family = order[idx];
     const available = allWeeks.filter((w) => !used.has(w));
-    const options = familyOptions(family, available);
+    const options = familyOptions(family, available, weeksWanted.get(family.id)!);
 
     for (const weeks of options) {
       if (timedOut) return;
