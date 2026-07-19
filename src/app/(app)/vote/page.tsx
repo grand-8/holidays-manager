@@ -15,7 +15,9 @@ export default async function VotePage() {
   const active = await getActiveCycle(user.propertyId);
   const cycleId =
     active?.id ?? (await getDecidedCycle(user.propertyId))?.id ?? null;
-  const data = cycleId ? await getVoteData(cycleId, user.id) : null;
+  const data = cycleId
+    ? await getVoteData(cycleId, user.id, user.propertyId)
+    : null;
 
   const canVote =
     data && data.statut === "vote" && data.proposals.length > 0;

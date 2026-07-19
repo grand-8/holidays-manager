@@ -59,10 +59,16 @@ export type VoteData = {
   finalDecidePar: string | null;
 };
 
-/** Charge les données de vote d'un cycle pour la famille `userId`. */
+/**
+ * Charge les données de vote d'un cycle pour la famille `userId`.
+ * `propertyId` doit être celui de l'appelant : garde de cloisonnement (§2/§7)
+ * portée par la fonction elle-même, pas seulement par ses appelants — évite
+ * qu'un futur écran mal scopé ne réintroduise un accès inter-biens (IDOR).
+ */
 export async function getVoteData(
   cycleId: string,
   userId: string,
+  propertyId: string,
   includeVoteCounts = false,
 ): Promise<VoteData | null> {
   const cycle = await prisma.cycle.findUnique({
@@ -86,7 +92,7 @@ export async function getVoteData(
       votes: { where: { userId } },
     },
   });
-  if (!cycle) return null;
+  if (!cycle || cycle.propertyId !== propertyId) return null;
 
   // Colonnes de la grille = toutes les semaines du cycle.
   const weeks: ProposalWeek[] = cycle.weekSlots.map((w) => ({
