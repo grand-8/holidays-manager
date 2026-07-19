@@ -29,6 +29,18 @@ export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_REQUEST_MAX = 3;
 export const OTP_REQUEST_WINDOW_MINUTES = 15;
 
+/**
+ * Anti-abus PAR IP sur la connexion (audit sécurité R4). Complète les limites
+ * par compte : borne le « spraying » (viser beaucoup de comptes depuis une même
+ * IP) et l'abus du service d'e-mail. Volontairement plus large que la limite par
+ * compte, car un foyer peut partager une IP.
+ */
+export const OTP_IP_WINDOW_MINUTES = 15;
+/** Demandes de code (envoi d'e-mail) par IP et par fenêtre. */
+export const OTP_IP_REQUEST_MAX = 12;
+/** Tentatives de vérification de code par IP et par fenêtre. */
+export const OTP_IP_VERIFY_MAX = 30;
+
 /** Durée de vie glissante d'une session, en jours (spec section 2). */
 export const SESSION_TTL_DAYS = 30;
 
