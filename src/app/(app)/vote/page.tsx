@@ -33,11 +33,14 @@ export default async function VotePage() {
               Vote · Vacances {data.annee}
             </p>
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">
-              Comparer les propositions
+              {data.proposals.length === 1
+                ? "La répartition proposée"
+                : "Comparer les propositions"}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Vous voyez le planning complet, les préférences et le taux de
-              satisfaction de chaque famille pour voter en toute transparence.
+              {data.proposals.length === 1
+                ? "Une seule répartition est possible avec les préférences de chacun. Confirmez-la par votre vote."
+                : "Vous voyez le planning complet, les préférences et le taux de satisfaction de chaque famille pour voter en toute transparence."}
             </p>
           </div>
           <VotePlanning

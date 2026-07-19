@@ -377,3 +377,16 @@ model AuditLog {
 
   @@index([tableConcernee, enregistrementId])
 }
+
+// Limitation de débit par IP (audit sécurité R4 / OWASP A07). Une ligne par
+// tentative, regroupée par « bucket » (ex. otp_request:<ip>). L'état est en base
+// (et non en mémoire) pour rester fiable en serverless : chaque invocation
+// Vercel peut tourner sur une instance différente. Purge opportuniste des
+// lignes hors fenêtre à chaque contrôle (voir src/lib/rate-limit.ts).
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  bucket    String
+  createdAt DateTime @default(now())
+
+  @@index([bucket, createdAt])
+}

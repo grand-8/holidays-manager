@@ -4,6 +4,9 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import {
+  OTP_IP_REQUEST_MAX,
+  OTP_IP_VERIFY_MAX,
+  OTP_IP_WINDOW_MINUTES,
   OTP_MAX_ATTEMPTS,
   OTP_REQUEST_MAX,
   OTP_REQUEST_WINDOW_MINUTES,
@@ -11,6 +14,7 @@ import {
 } from "@/lib/constants";
 import { generateOtpCode, hashOtpCode, verifyOtpCode } from "./otp";
 import { createSession, destroySession } from "./session";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { sendOtpEmail } from "@/lib/emails/otp";
 
 /**
@@ -52,6 +56,16 @@ export async function requestOtp(
     message:
       "Si cette adresse correspond à un compte, un code vient d'être envoyé.",
   };
+
+  // Anti-abus PAR IP (R4), avant tout accès base : borne le spraying et l'abus
+  // d'e-mail. Réponse générique en cas de blocage (aucune divulgation).
+  const ip = await getClientIp();
+  const allowed = await rateLimit(
+    `otp_request:${ip}`,
+    OTP_IP_REQUEST_MAX,
+    OTP_IP_WINDOW_MINUTES * 60 * 1000,
+  );
+  if (!allowed) return generic;
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -129,6 +143,16 @@ export async function verifyOtp(
     return { status: "error", message: "Code à 6 chiffres attendu." };
   }
   const { email, code } = parsed.data;
+
+  // Anti-abus PAR IP (R4) : borne le brute-force réparti sur plusieurs comptes
+  // depuis une même IP. Complète le plafond de 5 tentatives par code.
+  const ip = await getClientIp();
+  const allowed = await rateLimit(
+    `otp_verify:${ip}`,
+    OTP_IP_VERIFY_MAX,
+    OTP_IP_WINDOW_MINUTES * 60 * 1000,
+  );
+  if (!allowed) return invalid;
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !user.actif) return invalid;
