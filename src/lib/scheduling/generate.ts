@@ -17,7 +17,6 @@ import type {
 } from "./types";
 
 const DEFAULT_TIME_BUDGET_MS = 30_000;
-const MIN_PROPOSALS = 2;
 const MAX_PROPOSALS = 5;
 /**
  * Nombre maximal de variantes conservées par « palier » de score identique
@@ -260,8 +259,15 @@ function enumerateCombinations(
 }
 
 /**
- * Sélectionne entre 2 et 5 propositions à présenter (spec section 4.5, étape 3),
+ * Sélectionne jusqu'à 5 propositions à présenter (spec section 4.5, étape 3),
  * ou signale un basculement en mode de secours.
+ *
+ * Une SEULE répartition valable (scores tous ≥ seuil) est désormais présentée
+ * telle quelle (statut « ok », une proposition) plutôt que traitée comme un
+ * échec : quand les contraintes n'autorisent qu'un arrangement, c'est un
+ * résultat acceptable, pas un blocage. L'admin peut ensuite proposer un second
+ * tour ciblé s'il le souhaite. Le secours ne concerne donc plus que les vrais
+ * échecs : aucune combinaison, meilleur score minimum sous le seuil, ou timeout.
  */
 function selectProposals(
   combinations: ScoredCombination[],
@@ -312,9 +318,9 @@ function selectProposals(
     tryAdd(candidate);
   }
 
-  if (selected.length < MIN_PROPOSALS) {
-    return { status: "fallback", reason: "moins_de_deux" };
-  }
+  // `selected` contient toujours au moins une proposition ici (combinations est
+  // non vide et `ranked[0]` est ajouté d'office) : une répartition unique est un
+  // résultat valable, plus un motif de secours.
 
   // Ordonner le résultat final par score global décroissant (leximin).
   selected.sort(compareLeximin);

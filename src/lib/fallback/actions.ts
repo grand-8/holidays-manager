@@ -12,6 +12,7 @@ import { transitionToMediation, getMediationData } from "./service";
 import { getUnclaimedWeekIds } from "@/lib/unclaimed/service";
 import { sendFinalScheduleEmail } from "@/lib/emails/final";
 import { sendUnclaimedWeeksEmail } from "@/lib/emails/unclaimed";
+import { sendSecondRoundEmail } from "@/lib/emails/fallback";
 
 /**
  * Actions admin du mode de secours (spec section 4.7) : médiation manuelle,
@@ -34,6 +35,91 @@ export async function goToMediation(formData: FormData): Promise<void> {
   await transitionToMediation(cycleId, cycle.annee, cycle.propertyId);
   revalidatePath("/admin");
   revalidatePath("/tableau-de-bord");
+  redirect("/admin");
+}
+
+// --- Second tour proposé par l'admin (depuis le vote) ------------------------
+
+/**
+ * L'admin propose un second tour ciblé alors qu'un planning a bien été généré
+ * (§4.7.1, déclenchement manuel). Cas d'usage : une seule répartition possible,
+ * ou une répartition qui ne convient pas. Seules les familles cochées repassent
+ * en collecte ; les propositions et votes en cours sont purgés (on régénérera).
+ */
+export async function proposeSecondRound(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const cycleId = String(formData.get("cycleId") ?? "");
+  const userIds = formData.getAll("userIds").map(String).filter(Boolean);
+
+  const cycle = await prisma.cycle.findUnique({
+    where: { id: cycleId },
+    select: {
+      propertyId: true,
+      statut: true,
+      annee: true,
+      finalSchedule: { select: { id: true } },
+    },
+  });
+  if (!cycle || cycle.propertyId !== admin.propertyId) return;
+  // Uniquement pendant le vote, tant qu'aucune décision n'est prise.
+  if (cycle.statut !== "vote" || cycle.finalSchedule) return;
+  if (userIds.length === 0) return;
+
+  // On ne cible que des familles ACTIVES du bien (validation côté serveur).
+  const valid = await prisma.user.findMany({
+    where: { id: { in: userIds }, propertyId: admin.propertyId, actif: true },
+    select: { id: true },
+  });
+  const targetIds = valid.map((u) => u.id);
+  if (targetIds.length === 0) return;
+
+  await prisma.$transaction([
+    // Repart d'une collecte ciblée : purge des propositions (cascade →
+    // attributions + votes) et des participations de second tour antérieures.
+    prisma.scheduleProposal.deleteMany({ where: { cycleId } }),
+    prisma.secondRoundParticipant.deleteMany({ where: { cycleId } }),
+    ...targetIds.map((userId) =>
+      prisma.secondRoundParticipant.create({ data: { cycleId, userId } }),
+    ),
+    // Les familles ciblées doivent ré-ajuster : on efface leur marqueur de soumission.
+    prisma.familyRight.updateMany({
+      where: { cycleId, userId: { in: targetIds } },
+      data: { soumisLe: null },
+    }),
+    prisma.cycle.update({
+      where: { id: cycleId },
+      // Nouvelle deadline possible → réarme les relances préférences.
+      data: {
+        statut: "collecte_tour2",
+        relancePref7Le: null,
+        relancePref3Le: null,
+      },
+    }),
+  ]);
+
+  const [property, users] = await Promise.all([
+    prisma.property.findUnique({
+      where: { id: admin.propertyId },
+      select: { nom: true },
+    }),
+    prisma.user.findMany({
+      where: { id: { in: targetIds }, actif: true },
+      select: { email: true },
+    }),
+  ]);
+  const lieu = property?.nom ?? "Vacances familiales";
+  const annee = cycle.annee;
+  // Notifications après la réponse : l'admin n'attend pas Resend.
+  after(() =>
+    Promise.allSettled(
+      users.map((u) => sendSecondRoundEmail(u.email, annee, lieu)),
+    ),
+  );
+
+  revalidatePath("/admin");
+  revalidatePath("/tableau-de-bord");
+  revalidatePath("/preferences");
+  revalidatePath("/vote");
   redirect("/admin");
 }
 

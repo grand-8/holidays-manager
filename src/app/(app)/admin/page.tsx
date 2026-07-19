@@ -16,8 +16,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getVoteData } from "@/lib/vote/service";
-import { getMediationData } from "@/lib/fallback/service";
+import { getMediationData, getSecondRoundSuggestions } from "@/lib/fallback/service";
 import { goToMediation, forceRestart } from "@/lib/fallback/actions";
+import { SecondRoundProposer } from "./second-round-proposer";
 import { CheckCircle2 } from "lucide-react";
 import { AdminTabs } from "@/components/admin-tabs";
 import { PropertyNameForm } from "@/components/property-name-form";
@@ -155,9 +156,10 @@ async function VoteAdminView({
   annee: number;
   propertyId: string;
 }) {
-  const [data, familyCount] = await Promise.all([
+  const [data, familyCount, suggestions] = await Promise.all([
     getVoteData(cycleId, adminId, propertyId, true),
     prisma.user.count({ where: { propertyId, actif: true } }),
+    getSecondRoundSuggestions(cycleId, propertyId),
   ]);
   if (!data) return null;
 
@@ -167,17 +169,48 @@ async function VoteAdminView({
     );
   }
 
+  const singleOption = data.proposals.length === 1;
+
   return (
-    <AdminDecision
-      cycleId={cycleId}
-      familyCount={familyCount}
-      proposals={data.proposals.map((p, i) => ({
-        id: p.id,
-        index: i + 1,
-        globalScore: p.globalScore,
-        voteCount: p.voteCount ?? 0,
-      }))}
-    />
+    <div className="space-y-6">
+      {singleOption && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+          <p className="font-medium">Une seule répartition possible</p>
+          <p className="text-muted-foreground mt-1">
+            Les préférences actuelles ne permettent qu&apos;un seul planning. Il
+            reste valable et peut être validé. Si vous préférez, proposez un
+            second tour ci-dessous pour rouvrir la collecte aux familles
+            concernées.
+          </p>
+        </div>
+      )}
+
+      <AdminDecision
+        cycleId={cycleId}
+        familyCount={familyCount}
+        proposals={data.proposals.map((p, i) => ({
+          id: p.id,
+          index: i + 1,
+          globalScore: p.globalScore,
+          voteCount: p.voteCount ?? 0,
+        }))}
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Proposer un second tour</CardTitle>
+          <CardDescription>
+            Si la répartition ne convient pas (ou qu&apos;une seule est
+            possible), rouvrez la collecte pour les familles concernées, puis
+            relancez la génération. Les familles en concurrence sur une semaine
+            très demandée sont pré-cochées.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SecondRoundProposer cycleId={cycleId} candidates={suggestions} />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

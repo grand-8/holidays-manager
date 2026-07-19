@@ -130,6 +130,69 @@ export async function transitionToMediation(
   );
 }
 
+export type SecondRoundCandidate = {
+  userId: string;
+  nomAffiche: string;
+  /** Pré-cochée : famille « en tension » (voir ci-dessous). */
+  suggested: boolean;
+};
+
+/**
+ * Candidats à un second tour proposé par l'admin (§4.7.1, déclenchement manuel).
+ * Retourne toutes les familles participantes (non opt-out) avec un drapeau
+ * `suggested` = la famille demande (préférée/alternative) au moins une semaine
+ * « en tension » (souhaitée par ≥ 2 familles) — donc en concurrence directe.
+ * L'admin part de ces suggestions et ajuste librement les cases.
+ */
+export async function getSecondRoundSuggestions(
+  cycleId: string,
+  propertyId: string,
+): Promise<SecondRoundCandidate[]> {
+  const cycle = await prisma.cycle.findUnique({
+    where: { id: cycleId },
+    include: {
+      weekSlots: { select: { id: true, ordre: true } },
+      familyRights: {
+        include: { user: { select: { id: true, nomAffiche: true } } },
+      },
+      optOuts: { select: { userId: true } },
+      preferences: { select: { userId: true, weekSlotId: true, statut: true } },
+    },
+  });
+  if (!cycle || cycle.propertyId !== propertyId) return [];
+
+  const optedOut = new Set(cycle.optOuts.map((o) => o.userId));
+  const ordreByWeekSlot = new Map(cycle.weekSlots.map((w) => [w.id, w.ordre]));
+
+  // Demande par semaine + semaines désirées par famille (préférée/alternative).
+  const demand = new Map<number, number>();
+  const wantedByUser = new Map<string, Set<number>>();
+  for (const p of cycle.preferences) {
+    if (optedOut.has(p.userId)) continue;
+    if (p.statut !== "preferee" && p.statut !== "alternative") continue;
+    const ordre = ordreByWeekSlot.get(p.weekSlotId);
+    if (ordre === undefined) continue;
+    demand.set(ordre, (demand.get(ordre) ?? 0) + 1);
+    const set = wantedByUser.get(p.userId) ?? new Set<number>();
+    set.add(ordre);
+    wantedByUser.set(p.userId, set);
+  }
+  const tension = new Set(
+    [...demand.entries()].filter(([, c]) => c >= 2).map(([o]) => o),
+  );
+
+  return cycle.familyRights
+    .filter((r) => !optedOut.has(r.userId))
+    .map((r) => ({
+      userId: r.userId,
+      nomAffiche: r.user.nomAffiche,
+      suggested: [...(wantedByUser.get(r.userId) ?? [])].some((o) =>
+        tension.has(o),
+      ),
+    }))
+    .sort((a, b) => a.nomAffiche.localeCompare(b.nomAffiche));
+}
+
 /** La famille `userId` peut-elle saisir au second tour de ce cycle ? */
 export async function isSecondRoundParticipant(
   cycleId: string,

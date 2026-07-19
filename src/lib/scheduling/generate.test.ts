@@ -211,6 +211,25 @@ test("départage leximin : à global égal, la répartition la plus équitable g
   assert.equal(compareLeximin(a, { ...a }), 0);
 });
 
+test("une seule répartition valable → proposée telle quelle (plus de secours)", () => {
+  // Une seule combinaison possible (une famille, une semaine préférée). Avant,
+  // l'exigence de « 2 propositions minimum » la traitait comme un échec ; elle
+  // doit maintenant être présentée telle quelle (spec §4.5 assoupli).
+  const result = generateSchedules(
+    input({
+      weekCount: 1,
+      families: [
+        { id: "A", rightWeeks: 1, acceptsSplit: false, prefs: { 0: "preferee" } },
+      ],
+    }),
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(result.proposals.length, 1);
+  assert.equal(result.proposals[0].globalScore, 100);
+});
+
 test("meilleur score minimum sous le seuil → mode de secours 'sous_seuil'", () => {
   const result = generateSchedules(
     input({
