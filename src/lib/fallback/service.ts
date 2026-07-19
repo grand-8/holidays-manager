@@ -161,9 +161,12 @@ export type MediationData = {
 /**
  * Données de médiation (spec section 4.7.2) : toutes les préférences en clair,
  * réservées à l'admin. Les familles en opt-out ne sont pas à placer.
+ * `propertyId` doit être celui de l'appelant : garde de cloisonnement portée
+ * par la fonction elle-même (voir `getVoteData`, même rationale).
  */
 export async function getMediationData(
   cycleId: string,
+  propertyId: string,
 ): Promise<MediationData | null> {
   const cycle = await prisma.cycle.findUnique({
     where: { id: cycleId },
@@ -174,7 +177,7 @@ export async function getMediationData(
       preferences: true,
     },
   });
-  if (!cycle) return null;
+  if (!cycle || cycle.propertyId !== propertyId) return null;
 
   const optedOut = new Set(cycle.optOuts.map((o) => o.userId));
   const prefsByUser = new Map<string, Record<string, string>>();

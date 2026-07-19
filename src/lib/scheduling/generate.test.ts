@@ -33,7 +33,7 @@ test("notation de base : deux familles à 1 semaine, propose le meilleur global"
   assert.equal(result.proposals[1].globalScore, 40);
 });
 
-test("fractionnement forcé : score forfaitaire 30% + dédup des profils identiques", () => {
+test("fractionnement forcé : score forfaitaire 30% + variantes à score égal conservées (plafond par palier)", () => {
   const result = generateSchedules(
     input({
       weekCount: 3,
@@ -49,9 +49,20 @@ test("fractionnement forcé : score forfaitaire 30% + dédup des profils identiq
   assert.equal(result.status, "ok");
   if (result.status !== "ok") return;
 
-  // Les deux combinaisons {A40,B40} ont un profil identique → une seule retenue.
-  // Plus la combinaison au split forcé {A30,B40}. Total : 2 propositions.
-  assert.equal(result.proposals.length, 2);
+  // Deux façons d'obtenir {A:40,B:40} (A prend les semaines {0,1} ou {1,2}) :
+  // le plafond par palier (2 variantes max) les conserve TOUTES LES DEUX au
+  // lieu d'en masquer une (spec §4.5, étape 3). Plus la combinaison au split
+  // forcé {A30,B40}. Total : 3 propositions.
+  assert.equal(result.proposals.length, 3);
+
+  const tied = result.proposals.filter(
+    (p) => p.assignments.find((a) => a.familyId === "A")!.score === 40,
+  );
+  assert.equal(tied.length, 2, "les deux variantes à 40% doivent être conservées");
+  const aWeeksVariants = tied
+    .map((p) => [...p.assignments.find((a) => a.familyId === "A")!.weeks].sort().join(","))
+    .sort();
+  assert.deepEqual(aWeeksVariants, ["0,1", "1,2"]);
 
   const forced = result.proposals
     .flatMap((p) => p.assignments)
@@ -59,6 +70,35 @@ test("fractionnement forcé : score forfaitaire 30% + dédup des profils identiq
   assert.ok(forced, "une attribution en fractionnement forcé doit exister");
   assert.equal(forced.score, 30);
   assert.equal(forced.weeks.length, 2);
+});
+
+test("une variante à score égal mais semaines différentes n'est plus effacée par une option strictement moins bonne", () => {
+  // A et B préfèrent tous les deux les semaines 0 et 1 (2 et 3 par défaut).
+  // Deux façons d'obtenir 100% pour les deux (A=0/B=1 ou A=1/B=0), plus des
+  // combinaisons nettement moins bonnes si l'une des familles doit se
+  // contenter d'une semaine « sans préférence ». Avant le correctif, la
+  // seconde variante à 100% était supprimée (dédup par profil de score) et
+  // remplacée par une option plus faible ; elle doit maintenant être conservée.
+  const result = generateSchedules(
+    input({
+      weekCount: 4,
+      families: [
+        { id: "A", rightWeeks: 1, acceptsSplit: false, prefs: { 0: "preferee", 1: "preferee" } },
+        { id: "B", rightWeeks: 1, acceptsSplit: false, prefs: { 0: "preferee", 1: "preferee" } },
+      ],
+    }),
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+
+  const best = result.proposals.filter((p) => p.globalScore === 100);
+  assert.equal(best.length, 2, "les deux variantes à 100% doivent être conservées");
+
+  const weeksOfA = best
+    .map((p) => p.assignments.find((a) => a.familyId === "A")!.weeks[0])
+    .sort((a, b) => a - b);
+  assert.deepEqual(weeksOfA, [0, 1], "A obtient une semaine différente selon la variante");
 });
 
 test("fractionnement volontaire (deux 'préférée') : noté normalement, pas 30%", () => {

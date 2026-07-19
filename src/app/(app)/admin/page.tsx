@@ -87,7 +87,12 @@ export default async function AdminPage() {
           propertyId={admin.propertyId}
         />
       ) : cycle.statut === "mediation" ? (
-        <MediationView cycleId={cycle.id} adminId={admin.id} annee={cycle.annee} />
+        <MediationView
+          cycleId={cycle.id}
+          adminId={admin.id}
+          annee={cycle.annee}
+          propertyId={admin.propertyId}
+        />
       ) : (
         <section className="space-y-2">
           <p className="text-sm">
@@ -151,7 +156,7 @@ async function VoteAdminView({
   propertyId: string;
 }) {
   const [data, familyCount] = await Promise.all([
-    getVoteData(cycleId, adminId, true),
+    getVoteData(cycleId, adminId, propertyId, true),
     prisma.user.count({ where: { propertyId, actif: true } }),
   ]);
   if (!data) return null;
@@ -232,12 +237,14 @@ async function MediationView({
   cycleId,
   adminId,
   annee,
+  propertyId,
 }: {
   cycleId: string;
   adminId: string;
   annee: number;
+  propertyId: string;
 }) {
-  const voteData = await getVoteData(cycleId, adminId, true);
+  const voteData = await getVoteData(cycleId, adminId, propertyId, true);
   if (voteData?.finalScheduleProposalId) {
     return (
       <DecidedCard
@@ -249,7 +256,7 @@ async function MediationView({
     );
   }
 
-  const data = await getMediationData(cycleId);
+  const data = await getMediationData(cycleId, propertyId);
   if (!data) return null;
 
   return (

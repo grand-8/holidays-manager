@@ -74,7 +74,7 @@ export default async function DashboardPage() {
     unclaimedOpen
       ? getUnclaimedWeekIds(decidedCycle.id).then((w) => w.length)
       : 0,
-    showPlanning ? getVoteData(decidedCycle.id, user.id) : null,
+    showPlanning ? getVoteData(decidedCycle.id, user.id, user.propertyId) : null,
     getFamilyStats(user.propertyId),
   ]);
   const myStats = stats.find((s) => s.userId === user.id) ?? null;

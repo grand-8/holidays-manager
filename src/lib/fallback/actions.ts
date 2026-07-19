@@ -78,7 +78,7 @@ export async function saveMediation(
     };
   }
 
-  const data = await getMediationData(cycleId);
+  const data = await getMediationData(cycleId, admin.propertyId);
   if (!data) return { status: "error", message: "Données indisponibles." };
 
   const ordreByWeekSlot = new Map(data.weeks.map((w) => [w.id, w.ordre]));

@@ -19,6 +19,13 @@ import type {
 const DEFAULT_TIME_BUDGET_MS = 30_000;
 const MIN_PROPOSALS = 2;
 const MAX_PROPOSALS = 5;
+/**
+ * Nombre maximal de variantes conservées par « palier » de score identique
+ * (même score individuel pour chaque famille, semaines différentes). Évite
+ * qu'une vraie alternative à score égal soit purement et simplement effacée au
+ * profit d'une option strictement moins bonne (spec section 4.5, étape 3).
+ */
+const MAX_PER_SCORE_PROFILE = 2;
 
 /** Score d'une semaine selon son statut de préférence (spec section 4.2). */
 function weekScore(status: PreferenceStatus): number {
@@ -172,7 +179,11 @@ export function compareLeximin(
   return 0;
 }
 
-/** Deux combinaisons ont un profil de scores identique (famille par famille). */
+/**
+ * Deux combinaisons ont un profil de scores identique (famille par famille) —
+ * même si les semaines concrètement attribuées diffèrent. Sert à regrouper les
+ * combinaisons en « paliers » pour la sélection (voir `MAX_PER_SCORE_PROFILE`).
+ */
 function sameScoreProfile(
   a: ScoredCombination,
   b: ScoredCombination,
@@ -269,28 +280,36 @@ function selectProposals(
     return { status: "fallback", reason: "sous_seuil" };
   }
 
+  // Sélection par palier de score : jusqu'à `MAX_PER_SCORE_PROFILE` variantes
+  // (semaines différentes, même score par famille) sont conservées avant de
+  // descendre au palier de score suivant. Empêche qu'une vraie alternative à
+  // score égal soit remplacée par une option strictement moins bonne juste
+  // parce qu'une autre variante du même palier avait déjà été retenue.
   const selected: ScoredCombination[] = [];
-  const pushIfNew = (candidate: ScoredCombination): boolean => {
-    if (selected.some((s) => sameScoreProfile(s, candidate))) return false;
+  const selectedSet = new Set<ScoredCombination>();
+  const tryAdd = (candidate: ScoredCombination): boolean => {
+    if (selectedSet.has(candidate)) return false; // déjà retenue (même combinaison).
+    const tierCount = selected.filter((s) => sameScoreProfile(s, candidate)).length;
+    if (tierCount >= MAX_PER_SCORE_PROFILE) return false; // palier déjà plein.
     selected.push(candidate);
+    selectedSet.add(candidate);
     return true;
   };
 
   // 1) Le meilleur score global (leximin en cas d'égalité).
-  pushIfNew(ranked[0]);
+  tryAdd(ranked[0]);
 
   // 2) L'option la plus équitable (meilleur score minimum), si différente.
   const mostEquitable = [...ranked].sort((a, b) => {
     if (a.minScore !== b.minScore) return b.minScore - a.minScore;
     return compareLeximin(a, b);
   })[0];
-  pushIfNew(mostEquitable);
+  tryAdd(mostEquitable);
 
-  // 3) Compléter avec les meilleurs scores globaux suivants, en excluant tout
-  //    profil de scores strictement identique à une proposition déjà retenue.
+  // 3) Compléter avec les meilleurs scores globaux suivants, palier par palier.
   for (const candidate of ranked) {
     if (selected.length >= MAX_PROPOSALS) break;
-    pushIfNew(candidate);
+    tryAdd(candidate);
   }
 
   if (selected.length < MIN_PROPOSALS) {
