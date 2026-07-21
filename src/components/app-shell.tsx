@@ -52,7 +52,12 @@ export function AppShell({
           </Link>
 
           {user && (
-            <nav className="flex flex-1 items-center gap-0.5 overflow-x-auto">
+            // overflow-x-auto force implicitement overflow-y:auto ; le soulignement
+            // de l'onglet actif (-bottom-[9px]) dépasse alors la boîte et déclenche
+            // une scrollbar VERTICALE parasite. On masque l'axe vertical et on loge
+            // le soulignement dans un padding-bas neutralisé par une marge négative
+            // (aspect inchangé, plus de scrollbar).
+            <nav className="flex flex-1 items-center gap-0.5 overflow-x-auto overflow-y-hidden pb-2.5 -mb-2.5">
               {tabs.map((t) => (
                 <Link
                   key={t.href}

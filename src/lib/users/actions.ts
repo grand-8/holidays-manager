@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/current-user";
+import { logAudit } from "@/lib/audit";
 
 /**
  * Gestion des familles / utilisateurs (spec section 8).
@@ -57,6 +58,94 @@ export async function createUser(
 
   revalidatePath("/admin/utilisateurs");
   return { status: "saved", message: `Famille « ${parsed.data.nomAffiche} » ajoutée.` };
+}
+
+const updateSchema = z.object({
+  userId: z.string().min(1),
+  email: z.string().trim().toLowerCase().email(),
+  nomAffiche: z.string().trim().min(1, "Le nom est requis."),
+});
+
+/**
+ * Modifie le nom affiché et/ou l'adresse e-mail d'une famille (spec section 8 :
+ * « créer/modifier une famille »). Réservé à l'admin, appliqué DIRECTEMENT sans
+ * code OTP de confirmation — l'admin corrige une erreur pour le compte d'une
+ * famille (différent du changement self-service de la section 2, qui, lui, exige
+ * une validation sur la nouvelle adresse). Chaque champ modifié est journalisé
+ * dans l'AuditLog (section 5 : qui, quand, ancienne/nouvelle valeur).
+ */
+export async function updateUser(
+  _prev: UserActionState,
+  formData: FormData,
+): Promise<UserActionState> {
+  const admin = await requireAdmin();
+  const parsed = updateSchema.safeParse({
+    userId: formData.get("userId"),
+    email: formData.get("email"),
+    nomAffiche: formData.get("nomAffiche"),
+  });
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "Formulaire invalide.",
+    };
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: parsed.data.userId },
+  });
+  if (!target || target.propertyId !== admin.propertyId) {
+    return { status: "error", message: "Utilisateur introuvable." };
+  }
+
+  const emailChanged = parsed.data.email !== target.email;
+  const nomChanged = parsed.data.nomAffiche !== target.nomAffiche;
+  if (!emailChanged && !nomChanged) {
+    return { status: "saved", message: "Aucune modification." };
+  }
+
+  // Unicité de l'adresse (un compte = une famille = un email unique, section 2).
+  if (emailChanged) {
+    const taken = await prisma.user.findUnique({
+      where: { email: parsed.data.email },
+    });
+    if (taken) {
+      return { status: "error", message: "Cette adresse email existe déjà." };
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: target.id },
+      data: { email: parsed.data.email, nomAffiche: parsed.data.nomAffiche },
+    });
+    if (emailChanged) {
+      // Une éventuelle demande de changement self-service en attente devient
+      // caduque : on l'annule pour éviter qu'un ancien code ne réécrive l'email.
+      await tx.pendingEmailChange.deleteMany({ where: { userId: target.id } });
+      await logAudit(tx, {
+        tableConcernee: "User",
+        enregistrementId: target.id,
+        champ: "email",
+        ancienneValeur: target.email,
+        nouvelleValeur: parsed.data.email,
+        modifiePar: admin.email,
+      });
+    }
+    if (nomChanged) {
+      await logAudit(tx, {
+        tableConcernee: "User",
+        enregistrementId: target.id,
+        champ: "nomAffiche",
+        ancienneValeur: target.nomAffiche,
+        nouvelleValeur: parsed.data.nomAffiche,
+        modifiePar: admin.email,
+      });
+    }
+  });
+
+  revalidatePath("/admin/utilisateurs");
+  return { status: "saved", message: "Famille mise à jour." };
 }
 
 /** Nombre d'admins actifs du bien. */
