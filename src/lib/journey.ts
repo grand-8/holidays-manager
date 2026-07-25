@@ -90,10 +90,11 @@ export function preferencesEmptyMessage(s: JourneyStage): EmptyMessage {
         };
       return {
         title: s.responded
-          ? `Vos préférences pour ${a} sont transmises`
+          ? `Place au vote — ${a}`
           : `La collecte ${a} est terminée`,
-        description: "Place au vote : découvrez les plannings proposés.",
-        cta: { href: "/vote", label: "Voter pour le planning" },
+        description:
+          "Les plannings sont prêts. À vous de voter pour celui qui vous convient le mieux — votre vote compte dans la décision finale.",
+        cta: { href: "/vote", label: "Voter pour un planning" },
       };
     case "mediation":
       return {

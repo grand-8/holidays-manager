@@ -574,14 +574,14 @@ function MySituation({
   if (decided) {
     icon = <CheckCircle2 className="text-good size-4" />;
     value = "Planning arrêté";
-    desc = "La répartition est confirmée.";
+    desc = "La répartition finale est confirmée. Rien à faire.";
     cta = { href: "/vote", label: "Voir le planning →" };
   } else if (inVote && statut === "mediation") {
     icon = <Lock className="size-4" />;
     value = "Médiation";
     desc = isAdmin
-      ? "Arbitrage manuel requis."
-      : "L'administrateur arbitre la répartition.";
+      ? "À vous d'arbitrer manuellement la répartition."
+      : "L'administrateur arbitre la répartition. Rien à faire.";
     cta = isAdmin ? { href: "/admin", label: "Ouvrir la médiation →" } : null;
     actionNeeded = isAdmin;
   } else if (inVote) {
@@ -590,26 +590,26 @@ function MySituation({
     ) : (
       <VoteIcon className="size-4" />
     );
-    value = voted ? "Vous avez voté" : "À voter";
+    value = voted ? "Vous avez voté" : "À vous de voter";
     desc = voted
-      ? "Modifiable jusqu'à l'échéance."
-      : "Choisissez votre proposition préférée.";
+      ? "Vous pouvez changer d'avis jusqu'à l'échéance du vote."
+      : "Les plannings sont prêts : votez pour celui qui vous convient le mieux.";
     cta = { href: "/vote", label: voted ? "Modifier mon vote →" : "Voter →" };
     actionNeeded = !voted;
   } else if (inCollecte && secondRoundLocked) {
     icon = <Lock className="size-4" />;
     value = "Second tour";
-    desc = "Vos préférences sont verrouillées à ce tour.";
+    desc = "Vos préférences sont verrouillées à ce tour. Rien à faire.";
   } else if (inCollecte) {
     icon = responded ? (
       <CheckCircle2 className="text-good size-4" />
     ) : (
       <ClipboardList className="size-4" />
     );
-    value = responded ? "Vous avez répondu" : "À compléter";
+    value = responded ? "Préférences transmises" : "À vous de jouer";
     desc = responded
-      ? "Modifiable jusqu'à la clôture."
-      : "Renseignez vos préférences.";
+      ? "Vous pouvez les modifier jusqu'à la clôture de la collecte."
+      : "Indiquez les semaines qui vous conviennent avant l'échéance.";
     cta = {
       href: "/preferences",
       label: responded
@@ -621,8 +621,8 @@ function MySituation({
     icon = <CalendarClock className="size-4" />;
     value = "En préparation";
     desc = isAdmin
-      ? "Finalisez la configuration."
-      : "Rien à faire pour l'instant.";
+      ? "Finalisez la configuration du cycle pour lancer la collecte."
+      : "Vous serez prévenu·e par e-mail dès l'ouverture de la collecte.";
     cta = isAdmin ? { href: "/admin", label: "Configurer →" } : null;
     actionNeeded = isAdmin;
   }

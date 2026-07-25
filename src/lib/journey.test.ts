@@ -23,7 +23,10 @@ test("préférences — vote en cours, préférences transmises → CTA vers le 
     stage({ activeStatut: "vote", activeAnnee: 2026, responded: true }),
   );
   assert.match(m.title, /2026/);
-  assert.match(m.title, /transmises/i);
+  // Le message doit inviter clairement à voter (retour UX : l'étape du vote
+  // n'était pas assez explicite).
+  assert.match(m.title, /vote/i);
+  assert.match(m.description, /voter/i);
   assert.equal(m.cta?.href, "/vote");
 });
 
