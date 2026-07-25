@@ -15,7 +15,10 @@ export function proxy(req: NextRequest) {
     res.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      // `lax` : le cookie doit suivre l'arrivée sur le site depuis un lien
+      // d'e-mail (sinon l'utilisateur déjà connecté est renvoyé vers /connexion).
+      // Doit rester aligné avec sessionCookieOptions() dans lib/auth/session.ts.
+      sameSite: "lax",
       path: "/",
       maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
     });

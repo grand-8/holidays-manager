@@ -7,7 +7,12 @@ import { SESSION_COOKIE, SESSION_TTL_DAYS } from "@/lib/constants";
 /**
  * Gestion des sessions serveur (spec section 2).
  * - Le cookie contient un jeton aléatoire ; la base ne stocke que son HMAC.
- * - Cookie httpOnly + secure + sameSite=strict, durée glissante de 30 jours.
+ * - Cookie httpOnly + secure + sameSite=lax, durée glissante de 30 jours.
+ *   `lax` (et non `strict`) : le cookie doit accompagner l'arrivée sur le site
+ *   via un lien d'e-mail (navigation de premier niveau) pour que l'utilisateur
+ *   déjà connecté ne soit pas renvoyé vers /connexion. La protection CSRF reste
+ *   assurée (cookie retenu sur les requêtes POST inter-sites) et les actions se
+ *   font de toute façon par POST authentifié depuis une page du site (spec §9).
  * - La déconnexion invalide la session CÔTÉ SERVEUR (suppression en base).
  */
 
@@ -22,7 +27,7 @@ export function sessionCookieOptions(expires: Date) {
   return {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "strict" as const,
+    sameSite: "lax" as const,
     path: "/",
     expires,
   };
