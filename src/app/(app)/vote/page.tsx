@@ -34,13 +34,13 @@ export default async function VotePage() {
             </p>
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">
               {data.proposals.length === 1
-                ? "La répartition proposée"
-                : "Comparer les propositions"}
+                ? "Confirmez la répartition"
+                : "À vous de voter"}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
               {data.proposals.length === 1
-                ? "Une seule répartition est possible avec les préférences de chacun. Confirmez-la par votre vote."
-                : "Vous voyez le planning complet, les préférences et le taux de satisfaction de chaque famille pour voter en toute transparence."}
+                ? "Une seule répartition est possible avec les préférences de chacun. Validez-la par votre vote."
+                : "Comparez les plannings ci-dessous et votez pour celui qui vous convient le mieux. Votre vote compte dans la décision finale."}
             </p>
           </div>
           <VotePlanning
