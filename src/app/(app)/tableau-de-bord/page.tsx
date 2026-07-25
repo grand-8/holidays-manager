@@ -15,6 +15,7 @@ import { getActiveCycle, getCompletion } from "@/lib/cycles/service";
 import { getDecidedCycle, getUnclaimedWeekIds } from "@/lib/unclaimed/service";
 import { getVoteData, type VoteData } from "@/lib/vote/service";
 import { getFamilyStats } from "@/lib/stats/history";
+import { cn } from "@/lib/utils";
 import { FinalPlanning } from "../vote/final-planning";
 import { Button } from "@/components/ui/button";
 import {
@@ -221,29 +222,47 @@ async function ActiveDashboard({
   ).length;
   const doneCount = completion.filter((r) => r.responded).length;
 
-  // Meilleur score global : requête légère (pas besoin de charger tout le vote).
+  // Requêtes légères de la phase de vote : meilleur score global (indicatif) et
+  // nombre de familles ayant déjà voté — ce compteur est affiché à TOUTES les
+  // familles, à l'image du compteur de réponses en collecte.
   let topGlobal: number | null = null;
+  let votedCount = 0;
   if (inVote) {
-    const best = await prisma.scheduleProposal.findFirst({
-      where: { cycleId: cycle.id },
-      orderBy: { scoreGlobal: "desc" },
-      select: { scoreGlobal: true },
-    });
+    const [best, vc] = await Promise.all([
+      prisma.scheduleProposal.findFirst({
+        where: { cycleId: cycle.id },
+        orderBy: { scoreGlobal: "desc" },
+        select: { scoreGlobal: true },
+      }),
+      prisma.vote.count({ where: { cycleId: cycle.id } }),
+    ]);
     topGlobal = best?.scoreGlobal ?? null;
+    votedCount = vc;
   }
 
-  // Notification admin (§4.3 / §4.6) : toutes les familles ont répondu / voté.
+  // Familles réellement attendues au vote : les familles actives non opt-out
+  // (une famille en opt-out ne vote pas — sinon le compteur ne pourrait jamais
+  // atteindre le total).
   const familyCount = completion.length;
+  const eligibleVoters = completion.filter((r) => !r.optedOut).length;
+
+  // Notification admin (§4.3 / §4.6) : toutes les familles ont répondu / voté.
   const allResponded =
     inCollecte && familyCount > 0 && doneCount === familyCount;
-  let allVoted = false;
   // Une fois la décision prise (planning validé), on ne montre plus « tout le
   // monde a voté » : la notification a fait son office.
-  if (user.isAdmin && cycle.statut === "vote" && !decided) {
-    const voteCount = await prisma.vote.count({ where: { cycleId: cycle.id } });
-    allVoted = familyCount > 0 && voteCount >= familyCount;
-  }
+  const allVoted =
+    user.isAdmin &&
+    cycle.statut === "vote" &&
+    !decided &&
+    eligibleVoters > 0 &&
+    votedCount >= eligibleVoters;
   const adminReady = user.isAdmin && (allResponded || allVoted);
+
+  // Compteur de progression du bloc dashboard, adapté à la phase courante.
+  const progress = inVote
+    ? { label: "Familles ayant voté", done: votedCount, total: eligibleVoters }
+    : { label: "Réponses reçues", done: doneCount, total: familyCount };
 
   const deadlineIso = inCollecte
     ? cycle.deadlinePreferences?.toISOString()
@@ -355,14 +374,20 @@ async function ActiveDashboard({
         />
 
         <Tile
-          k="Réponses reçues"
-          icon={<ClipboardList className="size-4" />}
+          k={progress.label}
+          icon={
+            inVote ? (
+              <VoteIcon className="size-4" />
+            ) : (
+              <ClipboardList className="size-4" />
+            )
+          }
           value={
             <>
-              {doneCount}
+              {progress.done}
               <span className="text-muted-foreground text-sm font-medium">
                 {" "}
-                / {completion.length} familles
+                / {progress.total} familles
               </span>
             </>
           }
@@ -371,7 +396,7 @@ async function ActiveDashboard({
             <div
               className="bg-foreground h-full rounded-full"
               style={{
-                width: `${completion.length ? (doneCount / completion.length) * 100 : 0}%`,
+                width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%`,
               }}
             />
           </div>
@@ -541,6 +566,10 @@ function MySituation({
   let value = "À faire";
   let desc = "";
   let cta: { href: string; label: string } | null = null;
+  // `actionNeeded` : une action de l'utilisateur est réellement attendue ici et
+  // maintenant → on met le bloc en évidence (contour vert = « votre prochaine
+  // étape »). Les états déjà accomplis restent neutres, avec une icône ✓.
+  let actionNeeded = false;
 
   if (decided) {
     icon = <CheckCircle2 className="text-good size-4" />;
@@ -554,6 +583,7 @@ function MySituation({
       ? "Arbitrage manuel requis."
       : "L'administrateur arbitre la répartition.";
     cta = isAdmin ? { href: "/admin", label: "Ouvrir la médiation →" } : null;
+    actionNeeded = isAdmin;
   } else if (inVote) {
     icon = voted ? (
       <CheckCircle2 className="text-good size-4" />
@@ -565,6 +595,7 @@ function MySituation({
       ? "Modifiable jusqu'à l'échéance."
       : "Choisissez votre proposition préférée.";
     cta = { href: "/vote", label: voted ? "Modifier mon vote →" : "Voter →" };
+    actionNeeded = !voted;
   } else if (inCollecte && secondRoundLocked) {
     icon = <Lock className="size-4" />;
     value = "Second tour";
@@ -585,6 +616,7 @@ function MySituation({
         ? "Modifier mes préférences →"
         : "Saisir mes préférences →",
     };
+    actionNeeded = !responded;
   } else {
     icon = <CalendarClock className="size-4" />;
     value = "En préparation";
@@ -592,10 +624,16 @@ function MySituation({
       ? "Finalisez la configuration."
       : "Rien à faire pour l'instant.";
     cta = isAdmin ? { href: "/admin", label: "Configurer →" } : null;
+    actionNeeded = isAdmin;
   }
 
   return (
-    <div className="bg-card rounded-xl border p-5">
+    <div
+      className={cn(
+        "bg-card rounded-xl border p-5",
+        actionNeeded && "border-good ring-1 ring-good/30",
+      )}
+    >
       <div className="text-muted-foreground flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
         {icon} Ma situation
       </div>
