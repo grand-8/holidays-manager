@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import {
   saveFamilyRights,
   launchCollection,
@@ -123,7 +123,18 @@ export function CycleConfig(props: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={saveAction} className="space-y-3">
+          {/* Soumission via onSubmit et non `action={...}` : avec une action,
+              React réinitialise le formulaire après l'envoi, ce qui remet
+              chaque <select> contrôlé sur sa première option (« 1 semaine »)
+              alors que l'état garde les vraies valeurs. */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              startTransition(() => saveAction(formData));
+            }}
+            className="space-y-3"
+          >
             <input type="hidden" name="cycleId" value={cycleId} />
             {families.map((f) => (
               <div
